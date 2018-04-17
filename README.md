@@ -18,7 +18,7 @@ IMPORTANT:
     Install-Module Sudo
 
 # Import the module.
-    Import-Module Sudo    #Alternatively, Import-Module \\Path\To\PSNeo4j
+    Import-Module Sudo    #Alternatively, Import-Module \\Path\To\Sudo
 
 # Get commands in the module
     Get-Command -Module Sudo
