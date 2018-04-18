@@ -34,6 +34,7 @@ IMPORTANT:
 
 ```powershell
 PS C:\Users\zeroadmin> sudo {Install-Package Nuget.CommandLine -Source chocolatey}
+Please enter the password for zeroadmin: ***************
 
 PSComputerName       : localhost
 RunspaceId           : 0fdf310f-dcb3-4ba1-893e-d502c56ed6c0
