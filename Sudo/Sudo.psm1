@@ -120,46 +120,32 @@ function New-SudoSession {
             Mandatory=$True,
             ParameterSetName='Supply UserName and Password'
         )]
-        $Password,
+        [securestring]$Password,
 
         [Parameter(
             Mandatory=$True,
             ParameterSetName='Supply Credentials'
         )]
         [System.Management.Automation.PSCredential]$Credentials
-
     )
 
     ##### BEGIN Variable/Parameter Transforms and PreRun Prep #####
 
     if (Check-Elevation) {
-        Write-Verbose "The current PowerShell Session is already being run with elevated permissions. There is no reason to use the Start-SudoSession function. Halting!"
         Write-Error "The current PowerShell Session is already being run with elevated permissions. There is no reason to use the Start-SudoSession function. Halting!"
         $global:FunctionResult = "1"
         return
     }
 
-    if ($Password) {
-        if ($Password.GetType().FullName -notmatch "System\.String|System\.Security\.SecureString") {
-            Write-Error "The parameter -Password must be a System.String or System.Security.SecureString! Halting!"
-            $global:FunctionResult = "1"
-            return
-        }
-    }
-
-    if ($UserName -and !$Password -and !$Credentials) {
-        $Password = Read-Host -Prompt "Please enter the password for $UserName" -AsSecureString
-    }
-
     if ($UserName -and $Password) {
-        if ($Password.GetType().FullName -eq "System.String") {
-            $Password = ConvertTo-SecureString $Password -AsPlainText -Force
-        }
         $Credentials = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $UserName, $Password
     }
 
     if ($Credentials.UserName -match "\\") {
         $UserName = $($Credentials.UserName -split "\\")[-1]
+    }
+    if ($Username -match "\\") {
+        $UserName = $($UserName -split "\\")[-1]
     }
 
     $Domain = $(Get-CimInstance -ClassName Win32_ComputerSystem).Domain
@@ -174,7 +160,7 @@ function New-SudoSession {
     if (!$(Test-Path $SudoSessionFolder)) {
         $SudoSessionFolder = $(New-Item -ItemType Directory -Path $SudoSessionFolder).FullName
     }
-    $SudoSessionChangesPSObject = "$SudoSessionFolder\SudoSession_Config_Changes__$CurrentUser_$(Get-Date -Format MMddyyy_hhmmss).xml"
+    $SudoSessionChangesPSObject = "$SudoSessionFolder\SudoSession_Config_Changes_$CurrentUser_$(Get-Date -Format MMddyyy_hhmmss).xml"
     $TranscriptPath = "$SudoSessionFolder\SudoSession_Transcript_$CurrentUser_$(Get-Date -Format MMddyyy_hhmmss).txt"
     $SystemConfigScriptFilePath = "$SudoSessionFolder\SystemConfigScript.ps1"
     $CredDelRegLocation = "HKLM:\Software\Policies\Microsoft\Windows\CredentialsDelegation"
@@ -331,6 +317,7 @@ function New-SudoSession {
         [pscustomobject]@{
             ElevatedPSSession               = $ElevatedPSSession
             WSManAndRegistryChanges         = $SystemConfigScriptResult
+            ConfigChangesFilePath           = $SudoSessionChangesPSObject
         }
     ) -Force
     
@@ -410,7 +397,7 @@ function Start-SudoSession {
             Mandatory=$True,
             ParameterSetName='Supply UserName and Password'
         )]
-        $Password,
+        [securestring]$Password,
 
         [Parameter(
             Mandatory=$False,
@@ -429,33 +416,20 @@ function Start-SudoSession {
     ##### BEGIN Variable/Parameter Transforms and PreRun Prep #####
     
     if (Check-Elevation) {
-        Write-Verbose "The current PowerShell Session is already being run with elevated permissions. There is no reason to use the Start-SudoSession function. Halting!"
         Write-Error "The current PowerShell Session is already being run with elevated permissions. There is no reason to use the Start-SudoSession function. Halting!"
         $global:FunctionResult = "1"
         return
     }
 
-    if ($Password) {
-        if ($Password.GetType().FullName -notmatch "System\.String|System\.Security\.SecureString") {
-            Write-Error "The parameter -Password must be a System.String or System.Security.SecureString! Halting!"
-            $global:FunctionResult = "1"
-            return
-        }
-    }
-
-    if ($UserName -and !$Password -and !$Credentials) {
-        $Password = Read-Host -Prompt "Please enter the password for $UserName" -AsSecureString
-    }
-
     if ($UserName -and $Password) {
-        if ($Password.GetType().FullName -eq "System.String") {
-            $Password = ConvertTo-SecureString $Password -AsPlainText -Force
-        }
         $Credentials = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $UserName, $Password
     }
 
     if ($Credentials.UserName -match "\\") {
         $UserName = $($Credentials.UserName -split "\\")[-1]
+    }
+    if ($Username -match "\\") {
+        $UserName = $($UserName -split "\\")[-1]
     }
 
     $Domain = $(Get-CimInstance -ClassName Win32_ComputerSystem).Domain
@@ -614,63 +588,20 @@ function Remove-SudoSession {
         [System.Management.Automation.Runspaces.PSSession]$SessionToRemove,
 
         [Parameter(Mandatory=$False)]
-        $OriginalConfigInfo = $global:NewSessionAndOriginalStatus.WSManAndRegistryChanges,
-
-        [Parameter(
-            Mandatory=$False,
-            ParameterSetName='Supply UserName and Password'
-        )]
-        [string]$UserName = $([System.Security.Principal.WindowsIdentity]::GetCurrent().Name -split "\\")[-1],
-
-        [Parameter(
-            Mandatory=$True,
-            ParameterSetName='Supply UserName and Password'
-        )]
-        $Password,
-
-        [Parameter(
-            Mandatory=$True,
-            ParameterSetName='Supply Credentials'
-        )]
-        [System.Management.Automation.PSCredential]$Credentials
-
+        $OriginalConfigInfo = $global:NewSessionAndOriginalStatus.WSManAndRegistryChanges
     )
 
     ##### BEGIN Variable/Parameter Transforms and PreRun Prep #####
 
     if (Check-Elevation) {
-        Write-Verbose "The current PowerShell Session is already being run with elevated permissions. There is no reason to use the Start-SudoSession function. Halting!"
         Write-Error "The current PowerShell Session is already being run with elevated permissions. There is no reason to use the Start-SudoSession function. Halting!"
         $global:FunctionResult = "1"
         return
     }
 
-    if ($Password) {
-        if ($Password.GetType().FullName -notmatch "System\.String|System\.Security\.SecureString") {
-            Write-Error "The parameter -Password must be a System.String or System.Security.SecureString! Halting!"
-            $global:FunctionResult = "1"
-            return
-        }
-    }
-
     if ($OriginalConfigInfo -eq $null) {
         Write-Warning "Unable to determine the original configuration of WinRM/WSMan and AllowFreshCredentials Registry prior to using New-SudoSession. No configuration changes will be made/reverted."
         Write-Warning "The only action will be removing the Elevated PSSession specified by the -SessionToRemove parameter."
-    }
-
-    if ($UserName -and !$Password -and !$Credentials -and $OriginalConfigInfo -ne $null) {
-        $Password = Read-Host -Prompt "Please enter the password for $UserName" -AsSecureString
-    }
-
-    if ($UserName -and $Password) {
-        if ($Password.GetType().FullName -eq "System.String") {
-            $Password = ConvertTo-SecureString $Password -AsPlainText -Force
-        }
-        $Credentials = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $UserName, $Password
-    }
-
-    if ($Credentials.UserName -match "\\") {
-        $UserName = $($Credentials.UserName -split "\\")[-1]
     }
 
     $Domain = $(Get-CimInstance -ClassName Win32_ComputerSystem).Domain
@@ -681,56 +612,73 @@ function Remove-SudoSession {
     ##### BEGIN Main Body #####
 
     if ($OriginalConfigInfo -ne $null) {
-        [System.Collection.ArrayList]$SystemConfigScript = @()
+        # Use the existing SudoSession to revert Registry/WSMAN configs so that there's no UAC prompt
+        $SystemConfigSB = {
+            $OriginalConfigInfo = $using:OriginalConfigInfo
 
-        if ($SudoSessionInfo.WSManAndRegistryChanges.WSMANServerCredSSPStateChange) {
-            $Line = 'Set-Item -Path "WSMan:\localhost\Service\Auth\CredSSP" -Value false'
-            $null = $SystemConfigScript.Add($Line)
-        }
-        if ($SudoSessionInfo.WSManAndRegistryChanges.WSMANClientCredSSPStateChange) {
-            $Line = 'Set-Item -Path "WSMan:\localhost\Client\Auth\CredSSP" -Value false'
-            $null = $SystemConfigScript.Add($Line)
-        }
-        if ($SudoSessionInfo.WSManAndRegistryChanges.WinRMStateChange) {
-            if ([bool]$(Test-WSMan -ErrorAction SilentlyContinue)) {
-                $AdditionalLines = @(
-                    'try {'
-                    '    Disable-PSRemoting -Force -ErrorAction Stop -WarningAction SilentlyContinue'
-                    '    Stop-Service winrm -ErrorAction Stop'
-                    '    Set-Item "WSMan:\localhost\Service\AllowRemoteAccess" -Value false -ErrorAction Stop'
-                    '}'
-                    'catch {'
-                    '    Write-Error $_'
-                    '    $global:FunctionResult = "1"'
-                    '    return'
-                    '}'
-                )
-                foreach (AdditionalLine in $AdditionalLines) {
-                    $null = $SystemConfigScript.Add($AdditionalLine)
+            # Collect $Output as we go...
+            $Output = [ordered]@{}
+
+            if ($OriginalConfigInfo.WSMANServerCredSSPStateChange) {
+                Set-Item -Path "WSMan:\localhost\Service\Auth\CredSSP" -Value false
+                $Output.Add("CredSSPServer","Off")
+            }
+            if ($OriginalConfigInfo.WSMANClientCredSSPStateChange) {
+                Set-Item -Path "WSMan:\localhost\Client\Auth\CredSSP" -Value false
+                $Output.Add("CredSSPClient","Off")
+            }
+            if ($OriginalConfigInfo.WinRMStateChange) {
+                if ([bool]$(Test-WSMan -ErrorAction SilentlyContinue)) {
+                    try {
+                        Disable-PSRemoting -Force -ErrorAction Stop -WarningAction SilentlyContinue
+                        $Output.Add("PSRemoting","Disabled")
+                        Stop-Service winrm -ErrorAction Stop
+                        $Output.Add("WinRMService","Stopped")
+                        Set-Item "WSMan:\localhost\Service\AllowRemoteAccess" -Value false -ErrorAction Stop
+                        $Output.Add("WSMANServerAllowRemoteAccess",$False)
+                    }
+                    catch {
+                        Write-Error $_
+                        if ($Output.Count -gt 0) {[pscustomobject]$Output}
+                        $global:FunctionResult = "1"
+                        return
+                    }
                 }
             }
-        }
+    
+            if ($OriginalConfigInfo.RegistryKeyPropertiesCreated.Count -gt 0) {
+                [System.Collections.ArrayList]$RegistryKeyPropertiesRemoved = @()
 
-        if ($SudoSessionInfo.WSManAndRegistryChanges.RegistryKeyPropertiesCreated.Count -gt 0) {
-            foreach ($Property in $SudoSessionInfo.WSManAndRegistryChanges.RegistryKeyPropertiesCreated) {
-                $PropertyName = $($Property | Get-Member -Type NoteProperty | Where-Object {$_.Name -notmatch "PSPath|PSParentPath|PSChildName|PSDrive|PSProvider"}).Name
-                $PropertyPath = $Property.PSPath
-
-                if (Test-Path $PropertyPath) {
-                    $Line = "Remove-ItemProperty -Path $PropertyPath -Name $PropertyName"
-                    $null = $SystemConfigScript.Add($Line)
+                foreach ($Property in $OriginalConfigInfo.RegistryKeyPropertiesCreated) {
+                    $PropertyName = $($Property | Get-Member -Type NoteProperty | Where-Object {$_.Name -notmatch "PSPath|PSParentPath|PSChildName|PSDrive|PSProvider"}).Name
+                    $PropertyPath = $Property.PSPath
+    
+                    if (Test-Path $PropertyPath) {
+                        Remove-ItemProperty -Path $PropertyPath -Name $PropertyName
+                        $null = $RegistryKeyPropertiesRemoved.Add($Property)
+                    }
                 }
+
+                $Output.Add("RegistryKeyPropertiesRemoved",$RegistryKeyPropertiesRemoved)
             }
-        }
+    
+            if ($OriginalConfigInfo.RegistryKeysCreated.Count -gt 0) {
+                [System.Collections.ArrayList]$RegistryKeysRemoved = @()
 
-        if ($SudoSessionInfo.WSManAndRegistryChanges.RegistryKeysCreated.Count -gt 0) {
-            foreach ($RegKey in $SudoSessionInfo.WSManAndRegistryChanges.RegistryKeysCreated) {
-                $RegPath = $RegKey.PSPath
-
-                if (Test-Path $RegPath) {
-                    $Line = "Remove-Item $RegPath -Recurse -Force"
-                    $null = $SystemConfigScript.Add($Line)
+                foreach ($RegKey in $OriginalConfigInfo.RegistryKeysCreated) {
+                    $RegPath = $RegKey.PSPath
+    
+                    if (Test-Path $RegPath) {
+                        Remove-Item $RegPath -Recurse -Force
+                        $null = $RegistryKeysRemoved.Add($RegKey)
+                    }
                 }
+
+                $Output.Add("RegistryKeysRemoved",$RegistryKeysRemoved)
+            }
+
+            if ($Output.Count -gt 0) {
+                [pscustomobject]$Output
             }
         }
 
@@ -739,6 +687,257 @@ function Remove-SudoSession {
         if (!$(Test-Path $SudoSessionFolder)) {
             $SudoSessionFolder = $(New-Item -ItemType Directory -Path $SudoSessionFolder).FullName
         }
+        $SudoSessionRevertChangesPSObject = "$SudoSessionFolder\SudoSession_Config_Revert_Changes__$CurrentUser_$(Get-Date -Format MMddyyy_hhmmss).xml"
+
+        $WSMandAndRegistryRevertChangesResult = Invoke-Command -Session $SessionToRemove -Scriptblock $SystemConfigSB
+        $WSMandAndRegistryRevertChangesResult | Export-CliXml $SudoSessionRevertChangesPSObject
+    }
+
+    try {
+        Remove-PSSession $SessionToRemove -ErrorAction Stop
+    }
+    catch {
+        Write-Error $_
+        $global:FunctionResult = "1"
+        return
+    }
+
+    ##### END Main Body #####
+
+}
+
+# Just in case the PowerShell Session in which you originally created the SudoSession is killed/interrupted,
+# you can use this function to revert WSMAN/Registry changes that were made with the New-SudoSession function.
+# Example:
+#   Revert-SystemConfigChanges -SudoSessionChangesLogFilePath "$HOME\SudoSession_04182018\SudoSession_Config_Changes_04182018_082747.xml"
+function Revert-SystemConfigChanges {
+    [CmdletBinding(DefaultParameterSetName='Supply UserName and Password')]
+    Param(
+        [Parameter(Mandatory=$True)]
+        [string]$SudoSessionChangesLogFilePath,
+
+        [Parameter(
+            Mandatory=$False,
+            ParameterSetName='Supply UserName and Password'
+        )]
+        [string]$UserName = $([System.Security.Principal.WindowsIdentity]::GetCurrent().Name -split "\\")[-1],
+
+        [Parameter(
+            Mandatory=$False,
+            ParameterSetName='Supply UserName and Password'
+        )]
+        [securestring]$Password,
+
+        [Parameter(
+            Mandatory=$False,
+            ParameterSetName='Supply Credentials'
+        )]
+        [System.Management.Automation.PSCredential]$Credentials
+    )
+
+    ##### BEGIN Variable/Parameter Transforms and PreRun Prep #####
+
+    # First, ingest SudoSessionChangesLogFilePath
+    if (!$(Test-Path $SudoSessionChangesLogFilePath)) {
+        Write-Error "The path $SudoSessionChangesLogFilePath was not found! Halting!"
+        $global:FunctionResult = "1"
+        return
+    }
+    else {
+        $OriginalConfigInfo = Import-CliXML $SudoSessionChangesLogFilePath
+    }
+
+    $CurrentUser = $($(whoami) -split "\\")[-1]
+    $SudoSessionFolder = "$HOME\SudoSession_$CurrentUser_$(Get-Date -Format MMddyyy)"
+    if (!$(Test-Path $SudoSessionFolder)) {
+        $SudoSessionFolder = $(New-Item -ItemType Directory -Path $SudoSessionFolder).FullName
+    }
+    $SudoSessionRevertChangesPSObject = "$SudoSessionFolder\SudoSession_Config_Revert_Changes__$CurrentUser_$(Get-Date -Format MMddyyy_hhmmss).xml"
+
+    if (!$(Check-Elevation)) {
+        if ($UserName -and !$Password -and !$Credentials) {
+            $Password = Read-Host -Prompt "Please enter the password for $UserName" -AsSecureString
+        }
+    
+        if ($UserName -and $Password) {
+            $Credentials = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $UserName, $Password
+        }
+    
+        if ($Credentials.UserName -match "\\") {
+            $UserName = $($Credentials.UserName -split "\\")[-1]
+        }
+        if ($Username -match "\\") {
+            $UserName = $($UserName -split "\\")[-1]
+        }
+    
+        $Domain = $(Get-CimInstance -ClassName Win32_ComputerSystem).Domain
+        $LocalHostFQDN = "$env:ComputerName.$Domain"
+    }
+    
+    ##### END Variable/Parameter Transforms and PreRun Prep #####
+
+    ##### BEGIN Main Body #####
+
+    if (Check-Elevation) {
+        # Collect $Output as we go...
+        $Output = [ordered]@{}
+
+        if ($OriginalConfigInfo.WSMANServerCredSSPStateChange) {
+            Set-Item -Path "WSMan:\localhost\Service\Auth\CredSSP" -Value false
+            $Output.Add("CredSSPServer","Off")
+        }
+        if ($OriginalConfigInfo.WSMANClientCredSSPStateChange) {
+            Set-Item -Path "WSMan:\localhost\Client\Auth\CredSSP" -Value false
+            $Output.Add("CredSSPClient","Off")
+        }
+        if ($OriginalConfigInfo.WinRMStateChange) {
+            if ([bool]$(Test-WSMan -ErrorAction SilentlyContinue)) {
+                try {
+                    Disable-PSRemoting -Force -ErrorAction Stop -WarningAction SilentlyContinue
+                    $Output.Add("PSRemoting","Disabled")
+                    Stop-Service winrm -ErrorAction Stop
+                    $Output.Add("WinRMService","Stopped")
+                    Set-Item "WSMan:\localhost\Service\AllowRemoteAccess" -Value false -ErrorAction Stop
+                    $Output.Add("WSMANServerAllowRemoteAccess",$False)
+                }
+                catch {
+                    Write-Error $_
+                    if ($Output.Count -gt 0) {[pscustomobject]$Output}
+                    $global:FunctionResult = "1"
+                    return
+                }
+            }
+        }
+
+        if ($OriginalConfigInfo.RegistryKeyPropertiesCreated.Count -gt 0) {
+            [System.Collections.ArrayList]$RegistryKeyPropertiesRemoved = @()
+
+            foreach ($Property in $OriginalConfigInfo.RegistryKeyPropertiesCreated) {
+                $PropertyName = $($Property | Get-Member -Type NoteProperty | Where-Object {$_.Name -notmatch "PSPath|PSParentPath|PSChildName|PSDrive|PSProvider"}).Name
+                $PropertyPath = $Property.PSPath
+
+                if (Test-Path $PropertyPath) {
+                    Remove-ItemProperty -Path $PropertyPath -Name $PropertyName
+                    $null = $RegistryKeyPropertiesRemoved.Add($Property)
+                }
+            }
+
+            $Output.Add("RegistryKeyPropertiesRemoved",$RegistryKeyPropertiesRemoved)
+        }
+
+        if ($OriginalConfigInfo.RegistryKeysCreated.Count -gt 0) {
+            [System.Collections.ArrayList]$RegistryKeysRemoved = @()
+
+            foreach ($RegKey in $OriginalConfigInfo.RegistryKeysCreated) {
+                $RegPath = $RegKey.PSPath
+
+                if (Test-Path $RegPath) {
+                    Remove-Item $RegPath -Recurse -Force
+                    $null = $RegistryKeysRemoved.Add($RegKey)
+                }
+            }
+
+            $Output.Add("RegistryKeysRemoved",$RegistryKeysRemoved)
+        }
+
+        if ($Output.Count -gt 0) {
+            $Output.Add("RevertConfigChangesFilePath",$SudoSessionRevertChangesPSObject)
+
+            [pscustomobject]$Output
+            [pscustomobject]$Output | Export-CliXml $SudoSessionRevertChangesPSObject
+        }
+    }
+    else {
+        [System.Collections.ArrayList]$SystemConfigScript = @()
+
+        $Line = '$Output = [ordered]@{}'
+        $null = $SystemConfigScript.Add($Line)
+
+        if ($OriginalConfigInfo.WSMANServerCredSSPStateChange) {
+            $Line = 'Set-Item -Path "WSMan:\localhost\Service\Auth\CredSSP" -Value false'
+            $null = $SystemConfigScript.Add($Line)
+            $Line = '$Output.Add("CredSSPServer","Off")'
+            $null = $SystemConfigScript.Add($Line)
+        }
+        if ($OriginalConfigInfo.WSMANClientCredSSPStateChange) {
+            $Line = 'Set-Item -Path "WSMan:\localhost\Client\Auth\CredSSP" -Value false'
+            $null = $SystemConfigScript.Add($Line)
+            $Line = '$Output.Add("CredSSPClient","Off")'
+            $null = $SystemConfigScript.Add($Line)
+        }
+        if ($OriginalConfigInfo.WinRMStateChange) {
+            if ([bool]$(Test-WSMan -ErrorAction SilentlyContinue)) {
+                $AdditionalLines = @(
+                    'try {'
+                    '    Disable-PSRemoting -Force -ErrorAction Stop -WarningAction SilentlyContinue'
+                    '    $Output.Add("PSRemoting","Disabled")'
+                    '    Stop-Service winrm -ErrorAction Stop'
+                    '    $Output.Add("WinRMService","Stopped")'
+                    '    Set-Item "WSMan:\localhost\Service\AllowRemoteAccess" -Value false -ErrorAction Stop'
+                    '    $Output.Add("WSMANServerAllowRemoteAccess",$False)'
+                    '}'
+                    'catch {'
+                    '    Write-Error $_'
+                    '    if ($Output.Count -gt 0) {[pscustomobject]$Output}'
+                    '    $global:FunctionResult = "1"'
+                    '    return'
+                    '}'
+                )
+                foreach ($AdditionalLine in $AdditionalLines) {
+                    $null = $SystemConfigScript.Add($AdditionalLine)
+                }
+            }
+        }
+
+        if ($OriginalConfigInfo.RegistryKeyPropertiesCreated.Count -gt 0) {
+            $Line = '[System.Collections.ArrayList]$RegistryKeyPropertiesRemoved = @()'
+            $null = $SystemConfigScript.Add($Line)
+
+            foreach ($Property in $OriginalConfigInfo.RegistryKeyPropertiesCreated) {
+                $PropertyName = $($Property | Get-Member -Type NoteProperty | Where-Object {$_.Name -notmatch "PSPath|PSParentPath|PSChildName|PSDrive|PSProvider"}).Name
+                $PropertyPath = $Property.PSPath
+
+                if (Test-Path $PropertyPath) {
+                    $Line = "if ([bool](Get-ItemProperty -Path '$PropertyPath' -Name '$PropertyName' -EA SilentlyContinue)) {`$null = `$RegistryKeyPropertiesRemoved.Add((Get-ItemProperty -Path '$PropertyPath' -Name '$PropertyName'))}"
+                    $null = $SystemConfigScript.Add($Line)
+                    $Line = "Remove-ItemProperty -Path '$PropertyPath' -Name '$PropertyName'"
+                    $null = $SystemConfigScript.Add($Line)
+                }
+            }
+
+            $Line = '$Output.Add("RegistryKeyPropertiesRemoved",$RegistryKeyPropertiesRemoved)'
+            $null = $SystemConfigScript.Add($Line)
+        }
+
+        if ($OriginalConfigInfo.RegistryKeysCreated.Count -gt 0) {
+            $Line = '[System.Collections.ArrayList]$RegistryKeysRemoved = @()'
+            $null = $SystemConfigScript.Add($Line)
+
+            foreach ($RegKey in $OriginalConfigInfo.RegistryKeysCreated) {
+                $RegPath = $RegKey.PSPath
+
+                if (Test-Path $RegPath) {
+                    $Line = "if ([bool](Get-Item '$RegPath' -EA SilentlyContinue)) {`$null = `$RegistryKeysRemoved.Add((Get-Item '$RegPath'))}"
+                    $null = $SystemConfigScript.Add($Line)
+                    $Line = "Remove-Item '$RegPath' -Recurse -Force"
+                    $null = $SystemConfigScript.Add($Line)
+                }
+            }
+
+            $Line = '$Output.Add("RegistryKeysRemoved",$RegistryKeysRemoved)'
+            $null = $SystemConfigScript.Add($Line)
+        }
+
+        $AdditionalLines = @(
+            'if ($Output.Count -gt 0) {'
+            "    `$Output.Add('RevertConfigChangesFilePath','$SudoSessionRevertChangesPSObject')"
+            "    [pscustomobject]`$Output | Export-CliXml '$SudoSessionRevertChangesPSObject'"
+            '}'
+        )
+        foreach ($AdditionalLine in $AdditionalLines) {
+            $null = $SystemConfigScript.Add($AdditionalLine)
+        }
+
         $SystemConfigScriptFilePath = "$SudoSessionFolder\SystemConfigScript.ps1"
         $SystemConfigScript | Set-Content $SystemConfigScriptFilePath
 
@@ -756,25 +955,14 @@ function Remove-SudoSession {
         $Process.StartInfo = $ProcessInfo
         $Process.Start() | Out-Null
         $Process.WaitForExit()
-    }
-
-    try {
-        Remove-PSSession $SessionToRemove -ErrorAction -Stop
-    }
-    catch {
-        Write-Error $_
-        $global:FunctionResult = "1"
-        return
+        
+        $RevertChangesResult = Import-CliXML $SudoSessionRevertChangesPSObject
+        $RevertChangesResult
     }
 
     ##### END Main Body #####
-
+        
 }
-
-
-
-
-
 
 
 
@@ -784,8 +972,8 @@ function Remove-SudoSession {
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUBYTFyZ0PS0C4NAj8159TLRbt
-# LoSgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUGeBKXSyVZ/LmBdB7pL5+YMKw
+# gD2gggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -842,11 +1030,11 @@ function Remove-SudoSession {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFOd1ivI4o3Lhwrpb
-# Rk0mWoO7wxF1MA0GCSqGSIb3DQEBAQUABIIBAEaWChQsh225qle9KmAA/3zAqsvJ
-# cTIWkH1HHaDTIQ/C1hWVozqM/BfUKWP2LHKyOPMrHh1YDI2FKtazJLOUkkCmqsto
-# hUpqv7FQOeIf7A+bNXHMVZUeWm0oXoIB0Ty0qxW6JEcbH1Nr46qkR1TjJheYf+JU
-# DdTLaeSnB8+n/vdrZlAQe4sKTcEwS/HkfSZSYTGlLI3TL2IaCOkwm/qLhwSpOzRL
-# OV1I4LzWuFCR+ojouFCy/Frbi8yi8+DG1wFcu9OuuWkrZtK2UXEWpOjhhuNd/29Z
-# nZponWnTo107Lxay5YzQ/XERdD7mQIcd5/OOzcHnbJYXplF0SgHFj2MLzA8=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFHu5GB36kAatLIF4
+# 6waJKfLst04KMA0GCSqGSIb3DQEBAQUABIIBAL9dqtXuf0mr/Pa12H1ChlMiQtUA
+# Wihz5pdv5EXVAJsl7CRgxXbj2cyrfsYLWJARUVjFkQFXYxyzhfGz/E5uWeni2aTN
+# wDPxWsGrbVYr2SswVIM8iRdEKLgfndDHSPdHatOq+U9ABAjWUo9egyTXjw0y5Ftr
+# TLTkQzqaGdLkym8xOOGH6Cs9i9ckapB29v198aHTMMZEJVwmmylYDx+jnBOu9B1+
+# hlzG3JNl0KVcJdxRLwq1++sw+CX7t4z5XGyeyIEAvaosBtxApzIrstmkPgTKxDUQ
+# YqFctVRV4BHv1PRXQe5syXSqIIp658U+rIH7JRZrFOISmj4/qM6ovRDbldc=
 # SIG # End signature block
