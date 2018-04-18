@@ -66,18 +66,25 @@ PS C:\Users\zeroadmin> $MyElevatedSession = New-SudoSession -Credentials $ZeroAd
 PS C:\Users\zeroadmin> Invoke-Command -Session $MyElevatedSession.ElevatedPSSession -Scriptblock {Install-Package Nuget.CommandLine -Source chocolatey}
 ...
 # When you're finished running commands against this Sudo Session, remove it via:
-PS C:\Users\zeroadmin> Remove-SudoSession -Credentials $ZeroAdminCreds -OriginalConfigInfo $MyElevatedSesion.OriginalWSManAndRegistryStatus -SessionToRemove $MyElevatedSession.ElevatedPSSession
+PS C:\Users\zeroadmin> Remove-SudoSession -OriginalConfigInfo $MyElevatedSesion.WSManAndRegistryChanges -SessionToRemove $MyElevatedSession.ElevatedPSSession
 
 ```
 
-### Scenario 4: Create a New PSSession with Sudo Privileges, Run a Single Expression, and Destroy the Sudo Session All in One Go
+### Scenario 4: Create a New PSSession via New-SudoSession. Your current PowerShell Session is closed before you have a chance to run Remove-SudoSession.
 
 ```powershell
-PS C:\Users\zeroadmin> $ModuleToInstall = "PackageManagement"
-PS C:\Users\zeroadmin> $LatestVersion = $(Find-Module PackageManagement).Version
-# PLEASE NOTE the use of single quotes in the below $InstallModuleExpression string
-PS C:\Users\zeroadmin> $InstallModuleExpression = 'Install-Module -Name $ModuleToInstall -RequiredVersion $LatestVersion'
-PS C:\Users\zeroadmin> Start-SudoSession -Credentials $ZeroAdminCreds -Expression $InstallModuleExpression
+PS C:\Users\zeroadmin> $MyElevatedSession = New-SudoSession -Credentials $ZeroAdminCreds
+```
+
+At this point, if the above PowerShell Session is closed, there might still be outstanding changes to the localhost's Registry and WSMAN config. Revert your system config to what it was prior to using the `New-SudoSession` function by opening a new PowerShell Session (does not matter if it is elevated or not) and:
+
+```powershell
+PS C:\Users\zeroadmin> Import-Module Sudo
+PS C:\Users\zeroadmin> $CurrentUser = $($(whoami) -split "\\")[-1]
+PS C:\Users\zeroadmin> $SudoSessionFolder = "$HOME\SudoSession_$CurrentUser_$(Get-Date -Format MMddyyy)"
+PS C:\Users\zeroadmin> $SudoSessionChangesLogFilePath = $(Get-ChildItem -Path $SudoSessionFolder -File -Filter "SudoSession_Config_Changes*.xml" | Sort-Object -Property CreationTime)[-1].FullName
+PS C:\Users\zeroadmin> Restore-OriginalSystemConfig -SudoSessionChangesLogFilePath $SudoSessionChangesLogFilePath
+
 ```
 
 ## Notes
