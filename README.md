@@ -1,11 +1,9 @@
 [![Build status](https://ci.appveyor.com/api/projects/status/0w4exgcant21qx6h/branch/master?svg=true)](https://ci.appveyor.com/project/pldmgg/sudo/branch/master)
 
 # Sudo
-Create an Elevated PowerShell Session as any user that you have credentials for
+Sudo for PowerShell! From a non-privileged PowerShell Session, run one-off commands, scriptblocks, or enter an interactive PSSession with 'Run As Administrator' privileges! If you have credentials for a different user account, you can switch to that user as well.
 
-IMPORTANT:
-
-* Functions in this Module will NOT run in a PowerShell Session that was already launched using 'Run As Administrator'
+IMPORTANT: Functions in this Module will NOT run in a PowerShell Session that was already launched using 'Run As Administrator' (with the exception of the `Restore-OriginalSystemConfig` function)
 
 ## Getting Started
 
@@ -13,12 +11,12 @@ IMPORTANT:
 # One time setup
     # Download the repository
     # Unblock the zip
-    # Extract the PSNeo4j folder to a module path (e.g. $env:USERPROFILE\Documents\WindowsPowerShell\Modules\)
+    # Extract the Sudo folder to a module path (e.g. $env:USERPROFILE\Documents\WindowsPowerShell\Modules\)
 # Or, with PowerShell 5 or later or PowerShellGet:
     Install-Module Sudo
 
 # Import the module.
-    Import-Module Sudo    #Alternatively, Import-Module \\Path\To\Sudo
+    Import-Module Sudo    # Alternatively, Import-Module <PathToSudoFolder>
 
 # Get commands in the module
     Get-Command -Module Sudo
