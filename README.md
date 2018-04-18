@@ -76,7 +76,12 @@ PS C:\Users\zeroadmin> Remove-SudoSession -OriginalConfigInfo $MyElevatedSesion.
 PS C:\Users\zeroadmin> $MyElevatedSession = New-SudoSession -Credentials $ZeroAdminCreds
 ```
 
-At this point, if the above PowerShell Session is closed, there might still be outstanding changes to the localhost's Registry and WSMAN config. Revert your system config to what it was prior to using the `New-SudoSession` function by opening a new PowerShell Session (does not matter if it is elevated or not) and:
+At this point, if the above PowerShell Session is closed, there might still be outstanding changes to the localhost's Registry and WSMAN config. 
+
+(IMPORTANT NOTE: This scenario only pertains to the `New-SudoSession` function and it's sister function Remove-SudoSession. The `Start-SudoSession` (alias 'sudo') function does NOT have this problem because system config changes are made and reverted all in one
+fell swoop.)
+
+Revert your system config to what it was prior to using the `New-SudoSession` function by opening a new PowerShell Session (does not matter if it is elevated or not) and:
 
 ```powershell
 PS C:\Users\zeroadmin> Import-Module Sudo
