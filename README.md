@@ -1,5 +1,5 @@
-[![Build status](https://ci.appveyor.com/api/projects/status/github/pldmgg/sudo?branch=master&svg=true)]
-(https://ci.appveyor.com/project/pldmgg/sudo/branch/master)
+[![Build status](https://ci.appveyor.com/api/projects/status/github/pldmgg/sudo?branch=master&svg=true)](https://ci.appveyor.com/project/pldmgg/sudo/branch/master)
+
 
 # Sudo
 Sudo for PowerShell! From a non-privileged PowerShell Session, run one-off commands, scriptblocks, or enter an interactive PSSession with 'Run As Administrator' privileges! If you have credentials for a different user account, you can switch to that user as well.
