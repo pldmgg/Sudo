@@ -30,7 +30,26 @@ IMPORTANT:
 
 ## Examples
 
-### Scenario 1: Create a New PSSession with Sudo Privileges, and enter the session
+### Scenario 1: Using the Start-SudoSession function (alias 'sudo') to run a ScriptBlock with Elevated Privileges
+
+```powershell
+PS C:\Users\zeroadmin> sudo {Install-Package Nuget.CommandLine -Source chocolatey}
+
+PSComputerName       : localhost
+RunspaceId           : 0fdf310f-dcb3-4ba1-893e-d502c56ed6c0
+FastPackageReference : $aHR0cDovL2Nob2NvbGF0ZXkub3JnL2FwaS92Mi8=\TnVHZXQuQ29tbWFuZExpbmU=\NC42LjI=\Y2hvY29sYXRleQ==
+ProviderName         : Chocolatey
+Source               : chocolatey
+Status               : Installed
+SearchKey            : chocolatey
+FullPath             :
+PackageFilename      : NuGet.CommandLine.4.6.2.nupkg
+FromTrustedSource    : True
+Summary              : NuGet is the package manager for the Microsoft development platforms
+...[Truncated]...
+```
+
+### Scenario 2: Create a New PSSession with Sudo Privileges, and enter the session
 
 ```powershell
 PS C:\Users\zeroadmin> $MyElevatedSession = New-SudoSession -UserName -Credentials $TestAdminCreds
@@ -39,7 +58,7 @@ PS C:\Users\zeroadmin> Enter-PSSession -Session $MyElevatedSession.ElevatedPSSes
 zero\testadmin
 ```
 
-### Scenario 2: Create a New PSSession with Sudo Privileges and run one-off commands in that session
+### Scenario 3: Create a New PSSession with Sudo Privileges and run one-off commands in that session
 
 ```powershell
 PS C:\Users\zeroadmin> $MyElevatedSession = New-SudoSession -Credentials $ZeroAdminCreds
@@ -50,7 +69,7 @@ PS C:\Users\zeroadmin> Remove-SudoSession -Credentials $ZeroAdminCreds -Original
 
 ```
 
-### Scenario 3: Create a New PSSession with Sudo Privileges, Run a Single Expression, and Destroy the Sudo Session All in One Go
+### Scenario 4: Create a New PSSession with Sudo Privileges, Run a Single Expression, and Destroy the Sudo Session All in One Go
 
 ```powershell
 PS C:\Users\zeroadmin> $ModuleToInstall = "PackageManagement"
