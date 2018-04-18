@@ -3,7 +3,7 @@
 # Sudo
 Sudo for PowerShell! From a non-privileged PowerShell Session, run one-off commands, scriptblocks, or enter an interactive PSSession with 'Run As Administrator' privileges! If you have credentials for a different user account, you can switch to that user as well.
 
-IMPORTANT: Functions in this Module will NOT run in a PowerShell Session that was already launched using 'Run As Administrator' (with the exception of the `Restore-OriginalSystemConfig` function)
+IMPORTANT NOTE: Functions in this Module will NOT run in a PowerShell Session that was already launched using 'Run As Administrator' (with the exception of the `Restore-OriginalSystemConfig` function)
 
 ## Getting Started
 
