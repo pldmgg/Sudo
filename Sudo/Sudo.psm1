@@ -1,4 +1,4 @@
-function Check-Elevation {
+function Get-Elevation {
     if ($PSVersionTable.PSEdition -eq "Desktop" -or $PSVersionTable.Platform -eq "Win32NT" -or $PSVersionTable.PSVersion.Major -le 5) {
         [System.Security.Principal.WindowsPrincipal]$currentPrincipal = New-Object System.Security.Principal.WindowsPrincipal(
             [System.Security.Principal.WindowsIdentity]::GetCurrent()
@@ -131,7 +131,7 @@ function New-SudoSession {
 
     ##### BEGIN Variable/Parameter Transforms and PreRun Prep #####
 
-    if (Check-Elevation) {
+    if (Get-Elevation) {
         Write-Error "The current PowerShell Session is already being run with elevated permissions. There is no reason to use the Start-SudoSession function. Halting!"
         $global:FunctionResult = "1"
         return
@@ -389,6 +389,15 @@ function Start-SudoSession {
     Param(
         [Parameter(
             Mandatory=$False,
+            Position=0
+        )]
+        [scriptblock]$ScriptBlock,
+
+        [Parameter(Mandatory=$False)]
+        [string]$StringExpression,
+
+        [Parameter(
+            Mandatory=$False,
             ParameterSetName='Supply UserName and Password'
         )]
         [string]$UserName = $([System.Security.Principal.WindowsIdentity]::GetCurrent().Name -split "\\")[-1],
@@ -403,20 +412,20 @@ function Start-SudoSession {
             Mandatory=$False,
             ParameterSetName='Supply Credentials'
         )]
-        [pscredential]$Credentials,
-
-        [Parameter(Mandatory=$False)]
-        [scriptblock]$ScriptBlock,
-
-        [Parameter(Mandatory=$False)]
-        [string]$StringExpression
+        [pscredential]$Credentials
 
     )
 
     ##### BEGIN Variable/Parameter Transforms and PreRun Prep #####
     
-    if (Check-Elevation) {
+    if (Get-Elevation) {
         Write-Error "The current PowerShell Session is already being run with elevated permissions. There is no reason to use the Start-SudoSession function. Halting!"
+        $global:FunctionResult = "1"
+        return
+    }
+
+    if ($ScriptBlock -and $StringExpression) {
+        Write-Error "The function $(MyInvocation.MyCommand.Name) takes EITHER the -ScriptBlock parameter (position 0) OR the -StringExpression parameter! Halting!"
         $global:FunctionResult = "1"
         return
     }
@@ -593,7 +602,7 @@ function Remove-SudoSession {
 
     ##### BEGIN Variable/Parameter Transforms and PreRun Prep #####
 
-    if (Check-Elevation) {
+    if (Get-Elevation) {
         Write-Error "The current PowerShell Session is already being run with elevated permissions. There is no reason to use the Start-SudoSession function. Halting!"
         $global:FunctionResult = "1"
         return
@@ -709,8 +718,8 @@ function Remove-SudoSession {
 # Just in case the PowerShell Session in which you originally created the SudoSession is killed/interrupted,
 # you can use this function to revert WSMAN/Registry changes that were made with the New-SudoSession function.
 # Example:
-#   Revert-SystemConfigChanges -SudoSessionChangesLogFilePath "$HOME\SudoSession_04182018\SudoSession_Config_Changes_04182018_082747.xml"
-function Revert-SystemConfigChanges {
+#   Restore-OriginalSystemConfig -SudoSessionChangesLogFilePath "$HOME\SudoSession_04182018\SudoSession_Config_Changes_04182018_082747.xml"
+function Restore-OriginalSystemConfig {
     [CmdletBinding(DefaultParameterSetName='Supply UserName and Password')]
     Param(
         [Parameter(Mandatory=$True)]
@@ -754,7 +763,7 @@ function Revert-SystemConfigChanges {
     }
     $SudoSessionRevertChangesPSObject = "$SudoSessionFolder\SudoSession_Config_Revert_Changes__$CurrentUser_$(Get-Date -Format MMddyyy_hhmmss).xml"
 
-    if (!$(Check-Elevation)) {
+    if (!$(Get-Elevation)) {
         if ($UserName -and !$Password -and !$Credentials) {
             $Password = Read-Host -Prompt "Please enter the password for $UserName" -AsSecureString
         }
@@ -778,7 +787,7 @@ function Revert-SystemConfigChanges {
 
     ##### BEGIN Main Body #####
 
-    if (Check-Elevation) {
+    if (Get-Elevation) {
         # Collect $Output as we go...
         $Output = [ordered]@{}
 
@@ -964,16 +973,11 @@ function Revert-SystemConfigChanges {
         
 }
 
-
-
-
-
-
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUGeBKXSyVZ/LmBdB7pL5+YMKw
-# gD2gggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUx/Feew5jp0V1Q+t1sT8hxm3v
+# Xk+gggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -1030,11 +1034,11 @@ function Revert-SystemConfigChanges {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFHu5GB36kAatLIF4
-# 6waJKfLst04KMA0GCSqGSIb3DQEBAQUABIIBAL9dqtXuf0mr/Pa12H1ChlMiQtUA
-# Wihz5pdv5EXVAJsl7CRgxXbj2cyrfsYLWJARUVjFkQFXYxyzhfGz/E5uWeni2aTN
-# wDPxWsGrbVYr2SswVIM8iRdEKLgfndDHSPdHatOq+U9ABAjWUo9egyTXjw0y5Ftr
-# TLTkQzqaGdLkym8xOOGH6Cs9i9ckapB29v198aHTMMZEJVwmmylYDx+jnBOu9B1+
-# hlzG3JNl0KVcJdxRLwq1++sw+CX7t4z5XGyeyIEAvaosBtxApzIrstmkPgTKxDUQ
-# YqFctVRV4BHv1PRXQe5syXSqIIp658U+rIH7JRZrFOISmj4/qM6ovRDbldc=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFJS6Zi8l3fLoXeiz
+# LviNP/f6J736MA0GCSqGSIb3DQEBAQUABIIBABDQrhCgjzUkQJWhbB2Lz7NWgETg
+# YU998J9i9W6IoLvpxkL0giB2Vss4GZ69/y/r7hjoMfethDvs/4/I3SZSIYkD1oxK
+# +kLYUHPBwajzDouP+r2RPSywjfic8cnhE+4H7DmAXidWrEiCVWESRMEFj2q3q6kN
+# z0n8GKMh/V7oqxd+IZODnLLBvtcIU0AKds4FAOL/rvJV0H9Ii3ZGRFsOcsivm2lq
+# c5U2/kk/Xk0nFhl4DuEbt/n6TBlVfJYZur5p/9DD3PI9Aa+JQ94Hw1Q/NlH7P+Fh
+# ZfRbgc3kAHrasRC5dMJvey9jVdQTE/yWvqigkJpAp3q47GXj/X5+yYELIec=
 # SIG # End signature block
