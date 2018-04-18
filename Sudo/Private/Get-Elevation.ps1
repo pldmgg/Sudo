@@ -1,70 +1,28 @@
-﻿# Generic module deployment.
-#
-# ASSUMPTIONS:
-#
-# * folder structure either like:
-#
-#   - RepoFolder
-#     - This PSDeploy file
-#     - ModuleName
-#       - ModuleName.psd1
-#
-#   OR the less preferable:
-#   - RepoFolder
-#     - RepoFolder.psd1
-#
-# * Nuget key in $ENV:NugetApiKey
-#
-# * Set-BuildEnvironment from BuildHelpers module has populated ENV:BHModulePath and related variables
+function Get-Elevation {
+    if ($PSVersionTable.PSEdition -eq "Desktop" -or $PSVersionTable.Platform -eq "Win32NT" -or $PSVersionTable.PSVersion.Major -le 5) {
+        [System.Security.Principal.WindowsPrincipal]$currentPrincipal = New-Object System.Security.Principal.WindowsPrincipal(
+            [System.Security.Principal.WindowsIdentity]::GetCurrent()
+        )
 
-# Publish to gallery with a few restrictions
-if(
-    $env:BHModulePath -and
-    $env:BHBuildSystem -ne 'Unknown' -and
-    $env:BHBranchName -eq "master" -and
-    $env:BHCommitMessage -match '!deploy'
-)
-{
-    Deploy Module {
-        By PSGalleryModule {
-            FromSource $ENV:BHModulePath
-            To PSGallery
-            WithOptions @{
-                ApiKey = $ENV:NugetApiKey
-            }
+        [System.Security.Principal.WindowsBuiltInRole]$administratorsRole = [System.Security.Principal.WindowsBuiltInRole]::Administrator
+
+        if($currentPrincipal.IsInRole($administratorsRole)) {
+            return $true
+        }
+        else {
+            return $false
+        }
+    }
+    
+    if ($PSVersionTable.Platform -eq "Unix") {
+        if ($(whoami) -eq "root") {
+            return $true
+        }
+        else {
+            return $false
         }
     }
 }
-else
-{
-    "Skipping deployment: To deploy, ensure that...`n" +
-    "`t* You are in a known build system (Current: $ENV:BHBuildSystem)`n" +
-    "`t* You are committing to the master branch (Current: $ENV:BHBranchName) `n" +
-    "`t* Your commit message includes !deploy (Current: $ENV:BHCommitMessage)" |
-        Write-Host
-}
-
-# Publish to AppVeyor if we're in AppVeyor
-if(
-    $env:BHModulePath -and
-    $env:BHBuildSystem -eq 'AppVeyor'
-   )
-{
-    Deploy DeveloperBuild {
-        By AppVeyorModule {
-            FromSource $ENV:BHModulePath
-            To AppVeyor
-            WithOptions @{
-                Version = $env:APPVEYOR_BUILD_VERSION
-            }
-        }
-    }
-}
-
-
-
-
-
 
 
 
@@ -82,8 +40,8 @@ if(
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUP/aG8+l5aF/d5GqS2tsAyHVJ
-# 6VGgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUS1AJ3YFHU5WnRQ2F+X3UOO9A
+# D6Ggggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -140,11 +98,11 @@ if(
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFKVqRzd+sV8Q6IHi
-# q4IvO7eO8VZWMA0GCSqGSIb3DQEBAQUABIIBAKp0tinhUdVUmXwiVlW27TpMy4mI
-# dSSPZsz+iBsKcszI1faVGGdCMwijMyiFA+HUcZfU15VxnysfFEoF2ybO6s/axbTd
-# zpmMBRs3oIbFdPJ7jmmTKQgJDKWGjv3hsRppvifRKSMRnOBK+ydMKijz5Ap/7N4t
-# KmsT1H9cotOCrXjxltIxUeVU6Y2HMeYoQH8KDR/TekjE1PnxyD+G7SjaHW7EZ/YI
-# L5fhRkxCXFaprlIkQQpjggHeEv3TS69/M5HwZ9+YdBi/3CPe4IDp4dK5qkRzEevm
-# GjuZyc4GG76C/EdpnT20BdBTOSppwFS0XikGMbm8U16a1sJQmKnBc1Ii9EU=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFDO/hu2swnO9R9E2
+# 1niN0amLQLiIMA0GCSqGSIb3DQEBAQUABIIBADTqbuCR72cW7zJwwPZailGYAOPf
+# F1G3bhouGrEr5n/4Pjd0+USHvi+/g9zmZk0Vjr3pnE9cGHJjEBgASw3JmTeXxchT
+# Ej5QIsFNVEuV5OKPjt65PUSPx1qU2KJb3J3yHv/FwwYwkIFRT3SGIq0bUZCq4TA4
+# Q7RTqNtd2zcbm6/erZZQJA7IADdUMAODFvRZHAFks80AAWnj5MKR0h2qHJ5gX9Bj
+# JCNhvXXQahkDeEDelTsZPTa4MiyY+VkuzEFWwY/VtnR5q8VhME1wkFtRHvYlMrtX
+# bnUlnzuMHlWYJLUWduaI3a6X1Dg7/n3PuVpm0wVWvD/35I2wk6jBlliBzhg=
 # SIG # End signature block

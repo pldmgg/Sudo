@@ -1,71 +1,47 @@
-﻿# Generic module deployment.
-#
-# ASSUMPTIONS:
-#
-# * folder structure either like:
-#
-#   - RepoFolder
-#     - This PSDeploy file
-#     - ModuleName
-#       - ModuleName.psd1
-#
-#   OR the less preferable:
-#   - RepoFolder
-#     - RepoFolder.psd1
-#
-# * Nuget key in $ENV:NugetApiKey
-#
-# * Set-BuildEnvironment from BuildHelpers module has populated ENV:BHModulePath and related variables
+$PSVersion = $PSVersionTable.PSVersion.Major
+$ModuleName = $ENV:BHProjectName
+$ProjectRoot = $env:BHProjectPath
+$ModuleRoot = $(Get-ChildItem -Path $ProjectRoot -Recurse -File -Include "*.psm1").Directory.FullName
 
-# Publish to gallery with a few restrictions
-if(
-    $env:BHModulePath -and
-    $env:BHBuildSystem -ne 'Unknown' -and
-    $env:BHBranchName -eq "master" -and
-    $env:BHCommitMessage -match '!deploy'
-)
-{
-    Deploy Module {
-        By PSGalleryModule {
-            FromSource $ENV:BHModulePath
-            To PSGallery
-            WithOptions @{
-                ApiKey = $ENV:NugetApiKey
-            }
-        }
+# Verbose output for non-master builds on appveyor
+# Handy for troubleshooting.
+# Splat @Verbose against commands as needed (here or in pester tests)
+$Verbose = @{}
+if($ENV:BHBranchName -notlike "master" -or $env:BHCommitMessage -match "!verbose") {
+    $Verbose.add("Verbose",$True)
+}
+
+Describe -Name "General Project Validation: $ModuleName" -Tag 'Validation' -Fixture {
+    $Scripts = Get-ChildItem $ProjectRoot -Include *.ps1,*.psm1,*.psd1 -Recurse
+
+    # TestCases are splatted to the script so we need hashtables
+    $TestCasesHashTable = $Scripts | foreach {@{file=$_}}         
+    It "Script <file> should be valid powershell" -TestCases $TestCasesHashTable {
+        param($file)
+
+        $file.fullname | Should Exist
+
+        $contents = Get-Content -Path $file.fullname -ErrorAction Stop
+        $errors = $null
+        $null = [System.Management.Automation.PSParser]::Tokenize($contents, [ref]$errors)
+        $errors.Count | Should Be 0
+    }
+
+    It "Module '$ModuleName' Should Load" -Test {
+        {Import-Module $(Join-Path $ModuleRoot "$ModuleName.psm1") -Force} | Should Not Throw
+    }
+
+    It 'Module '$ModuleName' Is Loaded' {
+        $Module = Get-Module $ModuleName
+        $Module.Name -eq $ModuleName | Should -Be $True
+        $Commands = $Module.ExportedCommands.Keys
+        $Commands -contains 'Get-Elevation' | Should -Be $False
+        $Commands -contains 'New-SudoSession' | Should -Be $True
+        $Commands -contains 'Start-SudoSession' | Should -Be $True
+        $Commands -contains 'Remove-SudoSession' | Should -Be $True
+        $Commands -contains 'Restore-OriginalSystemConfig' | Should -Be $True
     }
 }
-else
-{
-    "Skipping deployment: To deploy, ensure that...`n" +
-    "`t* You are in a known build system (Current: $ENV:BHBuildSystem)`n" +
-    "`t* You are committing to the master branch (Current: $ENV:BHBranchName) `n" +
-    "`t* Your commit message includes !deploy (Current: $ENV:BHCommitMessage)" |
-        Write-Host
-}
-
-# Publish to AppVeyor if we're in AppVeyor
-if(
-    $env:BHModulePath -and
-    $env:BHBuildSystem -eq 'AppVeyor'
-   )
-{
-    Deploy DeveloperBuild {
-        By AppVeyorModule {
-            FromSource $ENV:BHModulePath
-            To AppVeyor
-            WithOptions @{
-                Version = $env:APPVEYOR_BUILD_VERSION
-            }
-        }
-    }
-}
-
-
-
-
-
-
 
 
 
@@ -82,8 +58,8 @@ if(
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUP/aG8+l5aF/d5GqS2tsAyHVJ
-# 6VGgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUHesQ+sHoOPtACleAkiuZUopA
+# na+gggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -140,11 +116,11 @@ if(
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFKVqRzd+sV8Q6IHi
-# q4IvO7eO8VZWMA0GCSqGSIb3DQEBAQUABIIBAKp0tinhUdVUmXwiVlW27TpMy4mI
-# dSSPZsz+iBsKcszI1faVGGdCMwijMyiFA+HUcZfU15VxnysfFEoF2ybO6s/axbTd
-# zpmMBRs3oIbFdPJ7jmmTKQgJDKWGjv3hsRppvifRKSMRnOBK+ydMKijz5Ap/7N4t
-# KmsT1H9cotOCrXjxltIxUeVU6Y2HMeYoQH8KDR/TekjE1PnxyD+G7SjaHW7EZ/YI
-# L5fhRkxCXFaprlIkQQpjggHeEv3TS69/M5HwZ9+YdBi/3CPe4IDp4dK5qkRzEevm
-# GjuZyc4GG76C/EdpnT20BdBTOSppwFS0XikGMbm8U16a1sJQmKnBc1Ii9EU=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFEFC+b1BmdLuJV2Y
+# 8bFQVFYbSBgDMA0GCSqGSIb3DQEBAQUABIIBAKEUKPg6yUnWC9q9svYT9Huj+ErF
+# Jz1cgripxzoRdTE7OIp/mdwtmoKKuHhO0getAM9gJKfgJTYZb7dHgumcO13z1x8x
+# KwYf7w+VPPaiH43EyqCjgxU8TknlqTSfk+RAMdOBYvcht/EsUi2L5vDA5E3JZqi9
+# GJOJDupCQPSQjFe6AkERKS24TmmT3EKgspFwvF8A4XHdVK/9897nigImFySm93+l
+# FCg9B8Vk3ewFYUCuh70wBkUsdpOC3JaIMIo7LVwpAMU3NxYT6vscYI6+pjTkEyrK
+# p8Hf2wAusdYXWZS645Ice6JkHhBH5uZpz6xruMyZRDUBRe/snkaoZCY79gc=
 # SIG # End signature block
