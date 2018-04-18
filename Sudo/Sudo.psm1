@@ -25,86 +25,86 @@ function Get-Elevation {
 }
 
 <#
-.SYNOPSIS
-    Creates an Elevated (i.e. "Run As Administrator") PSSession for the current user in the current PowerShell Session.
+    .SYNOPSIS
+        Creates an Elevated (i.e. "Run As Administrator") PSSession for the current user in the current PowerShell Session.
 
-.DESCRIPTION
-    Using WSMan's CredSSP Authentication mechanism, this function creates a New PSSession via the New-PSSession
-    cmdlet named "ElevatedPSSessionFor<UserName>". You can then run elevated commands in the Elevated PSSession by
-    either entering the Elevated PSSession via Enter-PSSession cmdlet or by using the Invoke-Command cmdlet with
-    its -Session parameter.
+    .DESCRIPTION
+        Using WSMan's CredSSP Authentication mechanism, this function creates a New PSSession via the New-PSSession
+        cmdlet named "ElevatedPSSessionFor<UserName>". You can then run elevated commands in the Elevated PSSession by
+        either entering the Elevated PSSession via Enter-PSSession cmdlet or by using the Invoke-Command cmdlet with
+        its -Session parameter.
 
-    This function will NOT run in a PowerShell Session that was launched using "Run As Administrator".
+        This function will NOT run in a PowerShell Session that was launched using "Run As Administrator".
 
-    When used in a Non-Elevated PowerShell session, this function:
+        When used in a Non-Elevated PowerShell session, this function:
 
-    1) Checks to make sure WinRM/WSMan is enabled and configured to allow CredSSP Authentication (if not then
-    configuration changes are made)
+        1) Checks to make sure WinRM/WSMan is enabled and configured to allow CredSSP Authentication (if not then
+        configuration changes are made)
 
-    2) Checks the Local Group Policy Object...
-        Computer Configuration -> Administrative Templates -> System -> Credentials Delegation -> Allow Delegating Fresh Credentials
-    ...to make sure it is enabled and configured to allow connections via WSMAN/<LocalHostFQDN>
+        2) Checks the Local Group Policy Object...
+            Computer Configuration -> Administrative Templates -> System -> Credentials Delegation -> Allow Delegating Fresh Credentials
+        ...to make sure it is enabled and configured to allow connections via WSMAN/<LocalHostFQDN>
 
-    3) Creates an Elevated PSSession using the New-PSSession cmdlet
+        3) Creates an Elevated PSSession using the New-PSSession cmdlet
 
-    4) Outputs a PSCustomObject that contains two Properties:
-    - ElevatedPSSession - Contains the object [PSSession]ElevatedPSSessionFor<UserName>
-    - WSManAndRegistryChanges - Contains another PSCustomObject with the following Properties -
-        [bool]WinRMStateChange
-        [bool]WSMANServerCredSSPStateChange
-        [bool]WSMANClientCredSSPStateChange
-        [System.Collections.ArrayList]RegistryKeyCreated
-        [System.Collections.ArrayList]RegistryKeyPropertiesCreated
+        4) Outputs a PSCustomObject that contains two Properties:
+        - ElevatedPSSession - Contains the object [PSSession]ElevatedPSSessionFor<UserName>
+        - WSManAndRegistryChanges - Contains another PSCustomObject with the following Properties -
+            [bool]WinRMStateChange
+            [bool]WSMANServerCredSSPStateChange
+            [bool]WSMANClientCredSSPStateChange
+            [System.Collections.ArrayList]RegistryKeyCreated
+            [System.Collections.ArrayList]RegistryKeyPropertiesCreated
 
-.NOTES
-    Recommend assigning this function to a variable when it is used so that it can be referenced in the companion
-    function Remove-SudoSession. If you do NOT assign a variable to this function when it is used, you can always
-    reference this function's PSCustomObject output by calling $global:NewSessionAndOriginalStatus, which is a
-    Global Scope variable created when this function is run. $global:NewSessionAndOriginalStatus.WSManAndRegistryChanges
-    can be used for Remove-SudoSession's -OriginalConfigInfo parameter, and $global:NewSessionAndOriginalStatus.ElevatedPSSesion
-    can be used for Remove-SudoSession's -SessionToRemove parameter.
+    .NOTES
+        Recommend assigning this function to a variable when it is used so that it can be referenced in the companion
+        function Remove-SudoSession. If you do NOT assign a variable to this function when it is used, you can always
+        reference this function's PSCustomObject output by calling $global:NewSessionAndOriginalStatus, which is a
+        Global Scope variable created when this function is run. $global:NewSessionAndOriginalStatus.WSManAndRegistryChanges
+        can be used for Remove-SudoSession's -OriginalConfigInfo parameter, and $global:NewSessionAndOriginalStatus.ElevatedPSSesion
+        can be used for Remove-SudoSession's -SessionToRemove parameter.
 
-.PARAMETER UserName
-    This is a string that represents a UserName with Administrator privileges. Defaults to current user.
+    .PARAMETER UserName
+        This is a string that represents a UserName with Administrator privileges. Defaults to current user.
 
-    This parameter is mandatory if you do NOT use the -Credentials parameter.
+        This parameter is mandatory if you do NOT use the -Credentials parameter.
 
-.PARAMETER Password
-    This can be either a plaintext string or a secure string that represents the password for the -UserName.
+    .PARAMETER Password
+        This can be either a plaintext string or a secure string that represents the password for the -UserName.
 
-    This parameter is mandatory if you do NOT use the -Credentials parameter.
+        This parameter is mandatory if you do NOT use the -Credentials parameter.
 
-.PARAMETER Credentials
-    This is a System.Management.Automation.PSCredential object used to create an elevated PSSession.
+    .PARAMETER Credentials
+        This is a System.Management.Automation.PSCredential object used to create an elevated PSSession.
 
-.EXAMPLE
-    PS C:\Users\zeroadmin> New-SudoSession -UserName zeroadmin -Credentials $MyCreds
+    .EXAMPLE
+        PS C:\Users\zeroadmin> New-SudoSession -UserName zeroadmin -Credentials $MyCreds
 
-    ElevatedPSSession                      WSManAndRegistryChanges
-    -----------------                      ------------------------------
-    [PSSession]ElevatedSessionForzeroadmin 
+        ElevatedPSSession                      WSManAndRegistryChanges
+        -----------------                      ------------------------------
+        [PSSession]ElevatedSessionForzeroadmin 
 
-    PS C:\Users\zeroadmin> Get-PSSession
+        PS C:\Users\zeroadmin> Get-PSSession
 
-     Id Name            ComputerName    ComputerType    State         ConfigurationName     Availability
-     -- ----            ------------    ------------    -----         -----------------     ------------
-      1 ElevatedSess... localhost       RemoteMachine   Opened        Microsoft.PowerShell     Available
+        Id Name            ComputerName    ComputerType    State         ConfigurationName     Availability
+        -- ----            ------------    ------------    -----         -----------------     ------------
+        1 ElevatedSess... localhost       RemoteMachine   Opened        Microsoft.PowerShell     Available
 
-    PS C:\Users\zeroadmin> Enter-PSSession -Name ElevatedSessionForzeroadmin
-    [localhost]: PS C:\Users\zeroadmin\Documents> 
+        PS C:\Users\zeroadmin> Enter-PSSession -Name ElevatedSessionForzeroadmin
+        [localhost]: PS C:\Users\zeroadmin\Documents> 
 
-.EXAMPLE
-    PS C:\Users\zeroadmin> $MyElevatedSession = New-SudoSession -UserName zeroadmin -Credentials $MyCreds
-    PS C:\Users\zeroadmin> Get-PSSession
+    .EXAMPLE
+        PS C:\Users\zeroadmin> $MyElevatedSession = New-SudoSession -UserName zeroadmin -Credentials $MyCreds
+        PS C:\Users\zeroadmin> Get-PSSession
 
-     Id Name            ComputerName    ComputerType    State         ConfigurationName     Availability
-     -- ----            ------------    ------------    -----         -----------------     ------------
-      1 ElevatedSess... localhost       RemoteMachine   Opened        Microsoft.PowerShell     Available
+        Id Name            ComputerName    ComputerType    State         ConfigurationName     Availability
+        -- ----            ------------    ------------    -----         -----------------     ------------
+        1 ElevatedSess... localhost       RemoteMachine   Opened        Microsoft.PowerShell     Available
 
-    PS C:\Users\zeroadmin> Invoke-Command -Session $MyElevatedSession.ElevatedPSSession -Scriptblock {Install-Package Nuget.CommandLine -Source chocolatey}
+        PS C:\Users\zeroadmin> Invoke-Command -Session $MyElevatedSession.ElevatedPSSession -Scriptblock {Install-Package Nuget.CommandLine -Source chocolatey}
 
-.OUTPUTS
-    See DESCRIPTION and NOTES sections
+    .OUTPUTS
+        See DESCRIPTION and NOTES sections
 
 #>
 function New-SudoSession {
@@ -117,13 +117,13 @@ function New-SudoSession {
         [string]$UserName = $([System.Security.Principal.WindowsIdentity]::GetCurrent().Name -split "\\")[-1],
 
         [Parameter(
-            Mandatory=$True,
+            Mandatory=$False,
             ParameterSetName='Supply UserName and Password'
         )]
         [securestring]$Password,
 
         [Parameter(
-            Mandatory=$True,
+            Mandatory=$False,
             ParameterSetName='Supply Credentials'
         )]
         [System.Management.Automation.PSCredential]$Credentials
@@ -137,7 +137,32 @@ function New-SudoSession {
         return
     }
 
-    if ($UserName -and $Password) {
+    if ($global:SudoCredentials) {
+        if (!$Credentials) {
+            if ($Username -match "\\") {
+                $UserName = $($UserName -split "\\")[-1]
+            }
+            if ($global:SudoCredentials.UserName -match "\\") {
+                $SudoUserName = $($global:SudoCredentials.UserName -split "\\")[-1]
+            }
+            else {
+                $SudoUserName = $global:SudoCredentials.UserName
+            }
+            if ($SudoUserName -match $UserName) {
+                $Credentials = $global:SudoCredentials
+            }
+        }
+        else {
+            if ($global:SudoCredentials.UserName -ne $Credentials.UserName) {
+                $global:SudoCredentials = $Credentials
+            }
+        }
+    }
+
+    if (!$Credentials) {
+        if (!$Password) {
+            $Password = Read-Host -Prompt "Please enter the password for $UserName" -AsSecureString
+        }
         $Credentials = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $UserName, $Password
     }
 
@@ -147,6 +172,8 @@ function New-SudoSession {
     if ($Username -match "\\") {
         $UserName = $($UserName -split "\\")[-1]
     }
+
+    $global:SudoCredentials = $Credentials
 
     $Domain = $(Get-CimInstance -ClassName Win32_ComputerSystem).Domain
     $LocalHostFQDN = "$env:ComputerName.$Domain"
@@ -403,7 +430,7 @@ function Start-SudoSession {
         [string]$UserName = $([System.Security.Principal.WindowsIdentity]::GetCurrent().Name -split "\\")[-1],
 
         [Parameter(
-            Mandatory=$True,
+            Mandatory=$False,
             ParameterSetName='Supply UserName and Password'
         )]
         [securestring]$Password,
@@ -413,7 +440,6 @@ function Start-SudoSession {
             ParameterSetName='Supply Credentials'
         )]
         [pscredential]$Credentials
-
     )
 
     ##### BEGIN Variable/Parameter Transforms and PreRun Prep #####
@@ -430,7 +456,32 @@ function Start-SudoSession {
         return
     }
 
-    if ($UserName -and $Password) {
+    if ($global:SudoCredentials) {
+        if (!$Credentials) {
+            if ($Username -match "\\") {
+                $UserName = $($UserName -split "\\")[-1]
+            }
+            if ($global:SudoCredentials.UserName -match "\\") {
+                $SudoUserName = $($global:SudoCredentials.UserName -split "\\")[-1]
+            }
+            else {
+                $SudoUserName = $global:SudoCredentials.UserName
+            }
+            if ($SudoUserName -match $UserName) {
+                $Credentials = $global:SudoCredentials
+            }
+        }
+        else {
+            if ($global:SudoCredentials.UserName -ne $Credentials.UserName) {
+                $global:SudoCredentials = $Credentials
+            }
+        }
+    }
+
+    if (!$Credentials) {
+        if (!$Password) {
+            $Password = Read-Host -Prompt "Please enter the password for $UserName" -AsSecureString
+        }
         $Credentials = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $UserName, $Password
     }
 
@@ -441,8 +492,7 @@ function Start-SudoSession {
         $UserName = $($UserName -split "\\")[-1]
     }
 
-    $Domain = $(Get-CimInstance -ClassName Win32_ComputerSystem).Domain
-    $LocalHostFQDN = "$env:ComputerName.$Domain"
+    $global:SudoCredentials = $Credentials
 
     if ($StringExpression) {
         # Find the variables in the $StringExpression string
@@ -613,9 +663,6 @@ function Remove-SudoSession {
         Write-Warning "The only action will be removing the Elevated PSSession specified by the -SessionToRemove parameter."
     }
 
-    $Domain = $(Get-CimInstance -ClassName Win32_ComputerSystem).Domain
-    $LocalHostFQDN = "$env:ComputerName.$Domain"
-
     ##### END Variable/Parameter Transforms and PreRunPrep #####
 
     ##### BEGIN Main Body #####
@@ -764,11 +811,32 @@ function Restore-OriginalSystemConfig {
     $SudoSessionRevertChangesPSObject = "$SudoSessionFolder\SudoSession_Config_Revert_Changes__$CurrentUser_$(Get-Date -Format MMddyyy_hhmmss).xml"
 
     if (!$(Get-Elevation)) {
-        if ($UserName -and !$Password -and !$Credentials) {
-            $Password = Read-Host -Prompt "Please enter the password for $UserName" -AsSecureString
+        if ($global:SudoCredentials) {
+            if (!$Credentials) {
+                if ($Username -match "\\") {
+                    $UserName = $($UserName -split "\\")[-1]
+                }
+                if ($global:SudoCredentials.UserName -match "\\") {
+                    $SudoUserName = $($global:SudoCredentials.UserName -split "\\")[-1]
+                }
+                else {
+                    $SudoUserName = $global:SudoCredentials.UserName
+                }
+                if ($SudoUserName -match $UserName) {
+                    $Credentials = $global:SudoCredentials
+                }
+            }
+            else {
+                if ($global:SudoCredentials.UserName -ne $Credentials.UserName) {
+                    $global:SudoCredentials = $Credentials
+                }
+            }
         }
     
-        if ($UserName -and $Password) {
+        if (!$Credentials) {
+            if (!$Password) {
+                $Password = Read-Host -Prompt "Please enter the password for $UserName" -AsSecureString
+            }
             $Credentials = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $UserName, $Password
         }
     
@@ -779,8 +847,7 @@ function Restore-OriginalSystemConfig {
             $UserName = $($UserName -split "\\")[-1]
         }
     
-        $Domain = $(Get-CimInstance -ClassName Win32_ComputerSystem).Domain
-        $LocalHostFQDN = "$env:ComputerName.$Domain"
+        $global:SudoCredentials = $Credentials
     }
     
     ##### END Variable/Parameter Transforms and PreRun Prep #####
@@ -972,12 +1039,11 @@ function Restore-OriginalSystemConfig {
     ##### END Main Body #####
         
 }
-
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUx/Feew5jp0V1Q+t1sT8hxm3v
-# Xk+gggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUHH27id8hz0FQgn/tElOjNNj/
+# 0Kagggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -1034,11 +1100,11 @@ function Restore-OriginalSystemConfig {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFJS6Zi8l3fLoXeiz
-# LviNP/f6J736MA0GCSqGSIb3DQEBAQUABIIBABDQrhCgjzUkQJWhbB2Lz7NWgETg
-# YU998J9i9W6IoLvpxkL0giB2Vss4GZ69/y/r7hjoMfethDvs/4/I3SZSIYkD1oxK
-# +kLYUHPBwajzDouP+r2RPSywjfic8cnhE+4H7DmAXidWrEiCVWESRMEFj2q3q6kN
-# z0n8GKMh/V7oqxd+IZODnLLBvtcIU0AKds4FAOL/rvJV0H9Ii3ZGRFsOcsivm2lq
-# c5U2/kk/Xk0nFhl4DuEbt/n6TBlVfJYZur5p/9DD3PI9Aa+JQ94Hw1Q/NlH7P+Fh
-# ZfRbgc3kAHrasRC5dMJvey9jVdQTE/yWvqigkJpAp3q47GXj/X5+yYELIec=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFBBRT/R0Ol3a7Qsa
+# eM9sOYlOe09CMA0GCSqGSIb3DQEBAQUABIIBAIrr+5672N7l0edxwTWdvrp/mEoa
+# 4+nPrmYrMGk7Y023meogkXUQ0WRoQ0CdwQqD9ZgdzxD3F846tB8Aq/VLtLq6Mjua
+# t0FoqOYLflGFEUzt9oHE+kjPzPGXeKrPTk1uoCaM/LbBZjz1gZfcApD9CUs9fKn4
+# sihyb6bRhoHgT1zKvtgYLSl1kUSlm56pnsT4zMDfF3f2niZn0MZtLt0bi6nvHgTi
+# l3mdMZfUXQM8SHNcbghtxIWaNcWvq898RWhHh0O7PEVjER+SsI9RcmOoEho2qr1e
+# wctGXaXYfuNznp2Pqbb8pdtvXPidSZ3AM/TkxIVJkD9n76YhRQ+snSLm18Q=
 # SIG # End signature block
