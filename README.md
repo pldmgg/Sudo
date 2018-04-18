@@ -59,3 +59,7 @@ PS C:\Users\zeroadmin> $LatestVersion = $(Find-Module PackageManagement).Version
 PS C:\Users\zeroadmin> $InstallModuleExpression = 'Install-Module -Name $ModuleToInstall -RequiredVersion $LatestVersion'
 PS C:\Users\zeroadmin> Start-SudoSession -Credentials $ZeroAdminCreds -Expression $InstallModuleExpression
 ```
+
+## Notes
+
+* Available via PSGallery

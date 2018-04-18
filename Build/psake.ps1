@@ -7,6 +7,7 @@ Properties {
         {
             $ProjectRoot = Resolve-Path "$PSScriptRoot\.."
         }
+        $ModuleRoot = Split-Path $(Resolve-Path "$ProjectRoot\*\*.psm1")
 
     $Timestamp = Get-Date -UFormat "%Y%m%d-%H%M%S"
     $PSVersion = $PSVersionTable.PSVersion.Major
