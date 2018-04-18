@@ -31,15 +31,15 @@ Describe -Name "General Project Validation: $ModuleName" -Tag 'Validation' -Fixt
         {Import-Module $(Join-Path $ModuleRoot "$ModuleName.psm1") -Force} | Should Not Throw
     }
 
-    It 'Module '$ModuleName' Is Loaded' {
+    It "Module '$ModuleName' Is Loaded" {
         $Module = Get-Module $ModuleName
-        $Module.Name -eq $ModuleName | Should -Be $True
+        $Module.Name -eq $ModuleName | Should Be $True
         $Commands = $Module.ExportedCommands.Keys
-        $Commands -contains 'Get-Elevation' | Should -Be $False
-        $Commands -contains 'New-SudoSession' | Should -Be $True
-        $Commands -contains 'Start-SudoSession' | Should -Be $True
-        $Commands -contains 'Remove-SudoSession' | Should -Be $True
-        $Commands -contains 'Restore-OriginalSystemConfig' | Should -Be $True
+        $Commands -contains 'Get-Elevation' | Should Be $False
+        $Commands -contains 'New-SudoSession' | Should Be $True
+        $Commands -contains 'Start-SudoSession' | Should Be $True
+        $Commands -contains 'Remove-SudoSession' | Should Be $True
+        $Commands -contains 'Restore-OriginalSystemConfig' | Should Be $True
     }
 }
 
@@ -58,8 +58,8 @@ Describe -Name "General Project Validation: $ModuleName" -Tag 'Validation' -Fixt
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUHesQ+sHoOPtACleAkiuZUopA
-# na+gggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUDHN0133YcRaz6clZxo6f//Vi
+# +gigggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -116,11 +116,11 @@ Describe -Name "General Project Validation: $ModuleName" -Tag 'Validation' -Fixt
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFEFC+b1BmdLuJV2Y
-# 8bFQVFYbSBgDMA0GCSqGSIb3DQEBAQUABIIBAKEUKPg6yUnWC9q9svYT9Huj+ErF
-# Jz1cgripxzoRdTE7OIp/mdwtmoKKuHhO0getAM9gJKfgJTYZb7dHgumcO13z1x8x
-# KwYf7w+VPPaiH43EyqCjgxU8TknlqTSfk+RAMdOBYvcht/EsUi2L5vDA5E3JZqi9
-# GJOJDupCQPSQjFe6AkERKS24TmmT3EKgspFwvF8A4XHdVK/9897nigImFySm93+l
-# FCg9B8Vk3ewFYUCuh70wBkUsdpOC3JaIMIo7LVwpAMU3NxYT6vscYI6+pjTkEyrK
-# p8Hf2wAusdYXWZS645Ice6JkHhBH5uZpz6xruMyZRDUBRe/snkaoZCY79gc=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFK2oGbWh+ts5wD+0
+# OXdtQ4V1ld8PMA0GCSqGSIb3DQEBAQUABIIBAJlBgMy48kQ11IIEQgQE7CUU6MKf
+# PqaqMVi20YCVPQL5FoxFEb85Wee8fJ6cnG9ewfAemILkGS8j/YB9UcoPSOLp40bs
+# iGkosHjwUwXMbD42j6KYMqYtLVOPf7JuqcfSb1o29xYTjNcPa1+9/hnPfy6ImWJi
+# rrk12tNgVbj4h88KZtSE4v+k9OfiRK1OyA1TnaMoXu0XRJqdP5WfiD9pVb/tMIWz
+# JLjK2Yj1WYSmIz9rVWja8Wl9d6Ax5ysQ97IE72ssV2iOpy8Z8W03I25zoLYy1mQM
+# w4VYdA6fLK2Mr7P0U/UtjQyp63mBMYx3LE0GffKHYfjjP3Z71tZYl8ekCzU=
 # SIG # End signature block
