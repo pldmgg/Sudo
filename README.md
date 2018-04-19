@@ -93,4 +93,4 @@ PS C:\Users\zeroadmin> Restore-OriginalSystemConfig -SudoSessionChangesLogFilePa
 
 ## Notes
 
-* Available via PSGallery
+* PSGallery: https://www.powershellgallery.com/packages/Sudo
