@@ -11,7 +11,6 @@ if($ENV:BHBranchName -notlike "master" -or $env:BHCommitMessage -match "!verbose
     $Verbose.add("Verbose",$True)
 }
 
-
 Describe -Name "General Project Validation: $ModuleName" -Tag 'Validation' -Fixture {
     $Scripts = Get-ChildItem $ProjectRoot -Include *.ps1,*.psm1,*.psd1 -Recurse
 
@@ -32,18 +31,60 @@ Describe -Name "General Project Validation: $ModuleName" -Tag 'Validation' -Fixt
         {Import-Module $(Join-Path $ModuleRoot "$ModuleName.psd1") -Force} | Should Not Throw
     }
 
-    It "Module '$ModuleName' Is Loaded" {
+    It "Module '$ModuleName' Public and Not Private Functions Are Available" {
         $Module = Get-Module $ModuleName
         $Module.Name -eq $ModuleName | Should Be $True
         $Commands = $Module.ExportedCommands.Keys
-        $Commands -contains 'Get-Elevation' | Should Be $False
+        $Commands -contains 'GetElevation' | Should Be $False
         $Commands -contains 'New-SudoSession' | Should Be $True
         $Commands -contains 'Start-SudoSession' | Should Be $True
         $Commands -contains 'Remove-SudoSession' | Should Be $True
         $Commands -contains 'Restore-OriginalSystemConfig' | Should Be $True
     }
+
+    It "Module '$ModuleName' Private Functions Are Available in Internal Scope" {
+        $Module = Get-Module $ModuleName
+        [bool]$Module.Invoke({Get-Item function:GetElevation}) | Should Be $True
+    }
 }
 
+<#
+Describe "New-SudoSession" {
+    It "Should return "
+}
+    Context "When there are Changes" {
+    	Mock New-SudoSession {
+            return [pscustomobject]@{
+                ElevatedPSSession               = 
+                WSManAndRegistryChanges         = $SystemConfigScriptResult
+                ConfigChangesFilePath           = $SudoSessionChangesPSObject
+            }
+        }
+    	Mock Get-NextVersion {return 1.2}
+    	Mock Build {} -Verifiable -ParameterFilter {$version -eq 1.2}
+
+    	$result = BuildIfChanged
+
+	    It "Builds the next version" {
+	        Assert-VerifiableMocks
+	    }
+	    It "returns the next version number" {
+	        $result | Should Be 1.2
+	    }
+    }
+    Context "When there are no Changes" {
+    	Mock Get-Version { return 1.1 }
+    	Mock Get-NextVersion { return 1.1 }
+    	Mock Build {}
+
+    	$result = BuildIfChanged
+
+	    It "Should not build the next version" {
+	        Assert-MockCalled Build -Times 0 -ParameterFilter {$version -eq 1.1}
+	    }
+    }
+}
+#>
 
 
 
@@ -59,8 +100,8 @@ Describe -Name "General Project Validation: $ModuleName" -Tag 'Validation' -Fixt
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUxoqx3KnZOmyZ5648PhLfXOxC
-# /fGgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUdVBYSNqBRNQ7Ag46VNCVHuji
+# d9Cgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -117,11 +158,11 @@ Describe -Name "General Project Validation: $ModuleName" -Tag 'Validation' -Fixt
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFPniyN3AV1YlhfIm
-# Q6LAbcFch4INMA0GCSqGSIb3DQEBAQUABIIBAEAHEwTNshCnfiwAZ/R1Yl9A3GL/
-# JYmoIP36V7ML0pFPIV+sxR8ZA3+imJN6RtYZ2qCcLo251yvhmi6hUoaQyjR1X2kK
-# YgSvXMdRsM/nQKX1CrkLbuCPT7owSpTnj/y7xzixZqwz6cNf1o14/Mqqf8RRQe4y
-# qOTfxzF5JCS4AfPLu9/LdK3bmGFa95fEWu4ETxgJauIe0UWeDai1Sw01Rsxu0BTM
-# Qm9VCKV3IF9W/pTacr8lb6esAWCOk6df+n/eSzFFbCbl16vAH3u+/LtEPRns4HiB
-# yw5gJNccrzwlha2zGPzXUc76jeNlbMoXJzBfiZHYrbmZTsHWhQEXY0Lkapg=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFELrR26CK0jjT18p
+# Wozu6RWDW5UfMA0GCSqGSIb3DQEBAQUABIIBAEZbDB272Ho4WeXKaO5AhOpe8QSN
+# BfktRI5iNxFHnPnVIFhYlwYtxsK1OFaY7F56f8pUmXu3uWtCB2tNc1nX4Pl5nls7
+# MR9PkWzAueD8k4LQpwCz4sC5oJFFH+5Jvefa54UHXQ8YGUcQTYlfvFs7jmPGKV/O
+# p42NFkXE0eVvf/typXr46HeaNpo2y6VMC/e2k6YSpSU0+F75t4ThV2WbnRwlgdsq
+# FTnbo/aLwm9q0m35jN2gQQFrj7Tn/mRTFmWPqjmqsxx0OW6l570P7zWxAsQQJ3RE
+# PULomgDXcDjXsYMgc8hFPANDAuxwaKokUak2+la2KdOksObQjDJgVi0PCMY=
 # SIG # End signature block

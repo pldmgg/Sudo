@@ -46,7 +46,7 @@ function Restore-OriginalSystemConfig {
     }
     $SudoSessionRevertChangesPSObject = "$SudoSessionFolder\SudoSession_Config_Revert_Changes__$CurrentUser_$(Get-Date -Format MMddyyy_hhmmss).xml"
 
-    if (!$(Get-Elevation)) {
+    if (!$(GetElevation)) {
         if ($global:SudoCredentials) {
             if (!$Credentials) {
                 if ($Username -match "\\") {
@@ -90,7 +90,7 @@ function Restore-OriginalSystemConfig {
 
     ##### BEGIN Main Body #####
 
-    if (Get-Elevation) {
+    if (GetElevation) {
         # Collect $Output as we go...
         $Output = [ordered]@{}
 
@@ -302,8 +302,8 @@ function Restore-OriginalSystemConfig {
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQURt7467NCC6gDLeFfhiPdwqGd
-# b7agggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUH5mufyKxdSBgSwaHD88U/fey
+# diSgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -360,11 +360,11 @@ function Restore-OriginalSystemConfig {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFPjajkNNWr1j/5oA
-# xtsA/sZDuQxRMA0GCSqGSIb3DQEBAQUABIIBAHOBMjHZQNf5PQR4VYoZioVShByP
-# NlendZs5p16aKuMEbdB3PkU/lfBGULz29afagzpf2QDqKicxTHqO3KsPu1/Gzke3
-# 5YA/u7ZBkqBQDqsj2tga748i5nMGt6iOZIN9WVEeU971R2IPON6tblKpYQGAOcF9
-# y4boYmGD16Xkwhw4ZjPBXkacFWilqumo2VrmnRqOxK3fDbNUhoFysUCzzZt+PXLJ
-# 5215JEG59KnryXsK0yWWfrTriTvCKNclb5mQdd/ccb5DkO6UjLYG/BY4e56tMvH7
-# 0xutKh7W5vu8qSKP9wnALgtxl3hcFbZOvlVzLqwyqTuY+H4iDJtFhinouKI=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFMVUi3x/aKSZeqpb
+# ChW38Vmu9Ma2MA0GCSqGSIb3DQEBAQUABIIBAMGY7hII3bAGXSqNvcYoyzH9zSgN
+# 8nmV5kq4dMccIHTnQAopKhsjQHSavu+DJ0VwCPOchYfdIsfxG30TOdwF193c7iT1
+# 0SF4ykVfPA2ThN+83nMZt/2G1nzUwKkELTIHmTp9ZM8UN/uj/0AT3sBUAz094Q0x
+# j3cMLe8fONsfBc4ynz7WW2lmdBqQAt1Q808Bcauwy20xgrXu6fzlBd9tBorWSuU7
+# P3Ayg2fVquEXXnuLg1iGPiLGrISWnTwane/Y0exRt7uxIO3owRr6NmIYTp0z0xeW
+# BGHItaN7LQDaCuGakMU03LjsdYDQ/ds/VrlsWV9O2PYd4G/ttHVhW7TBCQE=
 # SIG # End signature block

@@ -1,4 +1,4 @@
-function Get-Elevation {
+function GetElevation {
     if ($PSVersionTable.PSEdition -eq "Desktop" -or $PSVersionTable.Platform -eq "Win32NT" -or $PSVersionTable.PSVersion.Major -le 5) {
         [System.Security.Principal.WindowsPrincipal]$currentPrincipal = New-Object System.Security.Principal.WindowsPrincipal(
             [System.Security.Principal.WindowsIdentity]::GetCurrent()
@@ -43,8 +43,8 @@ function Get-Elevation {
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUjeMvdjHaUiS+rJbRpCS8N30M
-# +j6gggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUyDHuVg508vJ305ut7o38mEuK
+# Xfqgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -101,11 +101,11 @@ function Get-Elevation {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFIWg61SWhfcT1DpS
-# zR88c8buYgqCMA0GCSqGSIb3DQEBAQUABIIBAKh/ZCmszY0mUFY+Z2ZpuX0YbAVL
-# Ru9kQ8tQ7e8Rx/WZIZzIExDWpjfFKo9GBIHgFiN7idIjkNXrT9mjXSmzmI5iIV8g
-# J4fJ2ZvULDKfmQJHrIhC3WH9zlrTZUrUIymRlzt+kR4vh0moH25y1EvjiBrkv3yK
-# XFkBWtwcNpQghAB/SNFEQx5hioRYnyyczIc8/zw+Xm76wezdnCi0GuEFFmMK8gWh
-# grOWphruw6XNP8P8ZnFSqtxkDApfFb8Se83arJ24ljj9c5n418Fad7gYovpdb3kN
-# GZhHjxR0yhZURLG5btVbnxMvi/Kq/Cxa3pey1MvJRwtPD2pcMbs/8nYbGZ4=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFM7znQqD6YmCpUW1
+# 9rT9BcERZZCSMA0GCSqGSIb3DQEBAQUABIIBAIz23hYhruwBSt7DBWb0pcT5uWpN
+# +6FmbN8CKtfFinymcl7/vjqf/qPoBX1pnhJGXEX26rqKEd0Ngcz8cntFXxLgcTGl
+# l2z4xTA2KMgs0b8vvGHn42KcCnifbc7Qm3tv7WT09QmOYMNv2JCNkk7j1VPeCHH/
+# FHlyV3+jcHoH2j9/aw+K4M/cooIszGc6H+cIeUuEUxUTEm3/AUUIsox4Wbxrt9Mt
+# GEtvIJSFI0Ku/C5tYAaza3R/zyU+vWWVOJ+7QvspQei88M63TiQFpTvTfS+Q9tM7
+# FX8DI1p0Il85s9KXxHGJRYVrrQKzBYwQGWKrPgWK03/zYO1IRwucAIQ305I=
 # SIG # End signature block

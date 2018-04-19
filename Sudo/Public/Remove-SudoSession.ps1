@@ -82,7 +82,7 @@ function Remove-SudoSession {
 
     ##### BEGIN Variable/Parameter Transforms and PreRun Prep #####
 
-    if (Get-Elevation) {
+    if (GetElevation) {
         Write-Error "The current PowerShell Session is already being run with elevated permissions. There is no reason to use the Start-SudoSession function. Halting!"
         $global:FunctionResult = "1"
         return
@@ -214,8 +214,8 @@ function Remove-SudoSession {
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUil3gStASPgwLm9icMPEufZCD
-# e8qgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUGC6iUkim/j8VHdnSa3SKLuHb
+# NiWgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -272,11 +272,11 @@ function Remove-SudoSession {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFLNxhHQC/PfCeSy+
-# xHamzUF9CZ98MA0GCSqGSIb3DQEBAQUABIIBAJ+0NyUvfcPXvIyMYjp3EhskczlI
-# 11q9W23fvNvfvdyeWJr7OedjjuO0a4e7k2BQCQjvWnyv5A0P/W50OblwAjw/7Yen
-# 2+sWHXSAujT57clryY+seQ7MKty6T+kSyDLYnnbbCrWxPswBFhXkvJ1k8YblrtYP
-# 6F3Ei8UiDtGlUrhqAJ538eSUeAon09tL3DPks8aL5PD9lC4Lymej1/hxElvJylwX
-# /ee1WudiLBRPMUgJczVY2lDUFA6vN+Plbl9PDTNXj0aKGoDR0kQr2/m081Q4FhCn
-# o8ykUFK1gtz6VK3jkcLXurZy/XST8CNeyybrK3HKMRVBX2Xp4q2FKIRFiEU=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFFmjSQkDNMSlTP3d
+# N024rjFZ4NUkMA0GCSqGSIb3DQEBAQUABIIBAGhSe2VwO20lEjb/QLzvEvfDQJ9m
+# SGC/cl+z3haxH04J8vWbfR+CRJxlByNaxM1AlRwzszeIw4mwCr5cyxXJShF+PISW
+# lmwMSRwIVvhN9Oh2OelUd7pX3Zs3G7B1pdLI5ldvc8+KcasOiUQNmDzLReGWMrRw
+# LD6NyQLcB8FAkirXR17ygLJmzbOvayPnWq8psSU2HqYGoZnrk0L7+/rgXDdnN4rp
+# PQH/agypgPM69OYuQTKCe79ze6I/pK97rnYQxuX+ef9cW2WeY1BmUsTHXOjb6FMy
+# dG3mxlIUP5Cobud6NiQc16M+boHqCEUJmdDVovGFOq5vvCpN8Hcmeqg/k2Q=
 # SIG # End signature block

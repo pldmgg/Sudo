@@ -122,7 +122,7 @@ function New-SudoSession {
 
     ##### BEGIN Variable/Parameter Transforms and PreRun Prep #####
 
-    if (Get-Elevation) {
+    if (GetElevation) {
         Write-Error "The current PowerShell Session is already being run with elevated permissions. There is no reason to use the Start-SudoSession function. Halting!"
         $global:FunctionResult = "1"
         return
@@ -433,7 +433,7 @@ function Remove-SudoSession {
 
     ##### BEGIN Variable/Parameter Transforms and PreRun Prep #####
 
-    if (Get-Elevation) {
+    if (GetElevation) {
         Write-Error "The current PowerShell Session is already being run with elevated permissions. There is no reason to use the Start-SudoSession function. Halting!"
         $global:FunctionResult = "1"
         return
@@ -592,7 +592,7 @@ function Restore-OriginalSystemConfig {
     }
     $SudoSessionRevertChangesPSObject = "$SudoSessionFolder\SudoSession_Config_Revert_Changes__$CurrentUser_$(Get-Date -Format MMddyyy_hhmmss).xml"
 
-    if (!$(Get-Elevation)) {
+    if (!$(GetElevation)) {
         if ($global:SudoCredentials) {
             if (!$Credentials) {
                 if ($Username -match "\\") {
@@ -636,7 +636,7 @@ function Restore-OriginalSystemConfig {
 
     ##### BEGIN Main Body #####
 
-    if (Get-Elevation) {
+    if (GetElevation) {
         # Collect $Output as we go...
         $Output = [ordered]@{}
 
@@ -910,7 +910,7 @@ function Start-SudoSession {
 
     ##### BEGIN Variable/Parameter Transforms and PreRun Prep #####
     
-    if (Get-Elevation) {
+    if (GetElevation) {
         Write-Error "The current PowerShell Session is already being run with elevated permissions. There is no reason to use the Start-SudoSession function. Halting!"
         $global:FunctionResult = "1"
         return
@@ -1037,8 +1037,8 @@ function Start-SudoSession {
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUdF+Y/EfmLxCioE9yKq0eEF5F
-# 3E2gggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUV54Tw1OArauL0fG18wUKRXE1
+# oLugggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -1095,11 +1095,11 @@ function Start-SudoSession {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFC1Ef9ESHWw5ztmv
-# 6Uvj2W464r7cMA0GCSqGSIb3DQEBAQUABIIBAC5Z/S0uig63V5+ooLUVX51kfnj9
-# UmGctCOwQG8CxhWvNRbRR6kiZYJLGyV80UwF0YmXknsSJZ2lI3/iwOmZKt48ExWX
-# DsYUeV8USMWQV0mXk/5z4XGkrCknu+XAPuzXQG8WrwzMGSiiJ3Oe3fS6t/Vn6FHF
-# DKV312vlgTNxTv91fqDUan6NbmAkCThjQ48MPwop4GyIAdcSUvt8j0fhOtxI7KI/
-# qAwHr+edDmGyMB4I1qU0e55fNpZLJnSCWHuvKzQ8fMV4baZg33Cs5HHNzs8RdRQO
-# hFGtQe03tSeplBr2OljOxWPk9Glovl25EiX9ZC8bC1/j7AmirAVKp2d+NQg=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFMc3v8YKqrnnjJt9
+# bbApoVrNAjxaMA0GCSqGSIb3DQEBAQUABIIBABKFaVjMfRWJfWogslZaJlPU6FEU
+# 8/BpmUDMnolaxgcKThNnTnwV1ifAHLSewfVLSj5LxPHZIgiXieZIx6PdlsShR6bp
+# uEpf4xdxjph6Hx02DlBvZJzgGCrtPSK2wo+hN6jLPXq32lMU5t8lF2qLtwQH2pFj
+# SGMZUGbsZw6CtNEcKHM3xoZKXTEHzE9iu8GAio7YyjhVYtEhZBAHw6T3+pLNdsmY
+# prHwXa0SIpKQHx6wq5sh4Op0/HXL5MkLFWNKh3S6EbaluD5drtcWdy6gQn+L2QIX
+# 6RnjFcA/3ZC6Ng7mGFlQedAnNNxNzTYQQIvcClBWrwEF9QHgbWygnn9z4pE=
 # SIG # End signature block
