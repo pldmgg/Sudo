@@ -11,6 +11,7 @@ if($ENV:BHBranchName -notlike "master" -or $env:BHCommitMessage -match "!verbose
     $Verbose.add("Verbose",$True)
 }
 
+
 Describe -Name "General Project Validation: $ModuleName" -Tag 'Validation' -Fixture {
     $Scripts = Get-ChildItem $ProjectRoot -Include *.ps1,*.psm1,*.psd1 -Recurse
 
@@ -28,7 +29,7 @@ Describe -Name "General Project Validation: $ModuleName" -Tag 'Validation' -Fixt
     }
 
     It "Module '$ModuleName' Should Load" -Test {
-        {Import-Module $(Join-Path $ModuleRoot "$ModuleName.psm1") -Force} | Should Not Throw
+        {Import-Module $(Join-Path $ModuleRoot "$ModuleName.psd1") -Force} | Should Not Throw
     }
 
     It "Module '$ModuleName' Is Loaded" {
@@ -58,8 +59,8 @@ Describe -Name "General Project Validation: $ModuleName" -Tag 'Validation' -Fixt
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUDHN0133YcRaz6clZxo6f//Vi
-# +gigggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUxoqx3KnZOmyZ5648PhLfXOxC
+# /fGgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -116,11 +117,11 @@ Describe -Name "General Project Validation: $ModuleName" -Tag 'Validation' -Fixt
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFK2oGbWh+ts5wD+0
-# OXdtQ4V1ld8PMA0GCSqGSIb3DQEBAQUABIIBAJlBgMy48kQ11IIEQgQE7CUU6MKf
-# PqaqMVi20YCVPQL5FoxFEb85Wee8fJ6cnG9ewfAemILkGS8j/YB9UcoPSOLp40bs
-# iGkosHjwUwXMbD42j6KYMqYtLVOPf7JuqcfSb1o29xYTjNcPa1+9/hnPfy6ImWJi
-# rrk12tNgVbj4h88KZtSE4v+k9OfiRK1OyA1TnaMoXu0XRJqdP5WfiD9pVb/tMIWz
-# JLjK2Yj1WYSmIz9rVWja8Wl9d6Ax5ysQ97IE72ssV2iOpy8Z8W03I25zoLYy1mQM
-# w4VYdA6fLK2Mr7P0U/UtjQyp63mBMYx3LE0GffKHYfjjP3Z71tZYl8ekCzU=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFPniyN3AV1YlhfIm
+# Q6LAbcFch4INMA0GCSqGSIb3DQEBAQUABIIBAEAHEwTNshCnfiwAZ/R1Yl9A3GL/
+# JYmoIP36V7ML0pFPIV+sxR8ZA3+imJN6RtYZ2qCcLo251yvhmi6hUoaQyjR1X2kK
+# YgSvXMdRsM/nQKX1CrkLbuCPT7owSpTnj/y7xzixZqwz6cNf1o14/Mqqf8RRQe4y
+# qOTfxzF5JCS4AfPLu9/LdK3bmGFa95fEWu4ETxgJauIe0UWeDai1Sw01Rsxu0BTM
+# Qm9VCKV3IF9W/pTacr8lb6esAWCOk6df+n/eSzFFbCbl16vAH3u+/LtEPRns4HiB
+# yw5gJNccrzwlha2zGPzXUc76jeNlbMoXJzBfiZHYrbmZTsHWhQEXY0Lkapg=
 # SIG # End signature block

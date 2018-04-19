@@ -1,4 +1,25 @@
-﻿# PSake makes variables declared here available in other scriptblocks
+﻿param(
+    [string]$CertFileForSignature,
+    [System.Security.Cryptography.X509Certificates.X509Certificate2]$Cert
+)
+
+if ($CertFileForSignature -and !$Cert) {
+    if (!$(Test-Path $CertFileForSignature)) {
+        Write-Error "Unable to find the Certificate specified to be used for Code Signing! Halting!"
+        $global:FunctionResult = "1"
+        return
+    }
+
+    $Cert = Get-PfxCertificate $CertFileForSignature
+
+    if (!$Cert) {
+        Write-Error "The Get-PfxCertificate function failed! Check your password for the .pfx file. Halting!"
+        $global:FunctionResult = "1"
+        return
+    }
+}
+
+# PSake makes variables declared here available in other scriptblocks
 # Init some things
 Properties {
     # Find the build folder based on build system
@@ -8,6 +29,9 @@ Properties {
             $ProjectRoot = Resolve-Path "$PSScriptRoot\.."
         }
         $ModuleRoot = Split-Path $(Resolve-Path "$ProjectRoot\*\*.psm1")
+        $ModuleName = $ModuleRoot | Split-Path -Leaf
+        $PublicScriptFiles = Get-ChildItem "$ModuleRoot\Public" -File -Filter *.ps1 -Recurse
+        $PrivateScriptFiles = Get-ChildItem -Path "$ModuleRoot\Private" -File -Filter *.ps1 -Recurse
 
     $Timestamp = Get-Date -UFormat "%Y%m%d-%H%M%S"
     $PSVersion = $PSVersionTable.PSVersion.Major
@@ -19,11 +43,16 @@ Properties {
     {
         $Verbose = @{Verbose = $True}
     }
+
+    if ($Cert) {
+        # Need to Declare $Cert here in the 'Properties' block so that it's available in other script blocks
+        $Cert = $Cert
+    }
 }
 
 Task Default -Depends Test
 
-Task Init {
+Task Init -RequiredVariables  {
     $lines
     Set-Location $ProjectRoot
     "Build System Details:"
@@ -31,7 +60,54 @@ Task Init {
     "`n"
 }
 
-Task Test -Depends Init  {
+Task Compile {
+    $BoilerPlatePrivateFunctionSourcing = @'
+# Get public and private function definition files.
+[array]$Public  = Get-ChildItem -Path "$PSScriptRoot\Public\*.ps1" -ErrorAction SilentlyContinue
+[array]$Private = Get-ChildItem -Path "$PSScriptRoot\Private\*.ps1" -ErrorAction SilentlyContinue
+
+# Dot source the Private functions
+foreach ($import in $Private) {
+    try {
+        . $import.FullName
+    }
+    catch {
+        Write-Error -Message "Failed to import function $($import.FullName): $_"
+    }
+}
+
+# Public Functions
+'@ | Set-Content -Path "$ModuleRoot\$ModuleName.psm1"
+
+    [System.Collections.ArrayList]$FunctionTextToAdd = @()
+    $Counter = 0
+    foreach ($ScriptFile in $PublicScriptFiles) {
+        $FileContent = Get-Content $ScriptFile.FullName
+        $SigBlockLineNumber = $FileContent.IndexOf('# SIG # Begin signature block')
+        $FunctionSansSigBlock = $($($FileContent[0..$($SigBlockLineNumber-1)]) -join "`n").Trim() -split "`n"
+        $null = $FunctionTextToAdd.Add("`n")
+        $null = $FunctionTextToAdd.Add($FunctionSansSigBlock)
+        $Counter++
+    }
+    $null = $FunctionTextToAdd.Add("`n")
+
+    Add-Content -Value $FunctionTextToAdd -Path "$ModuleRoot\$ModuleName.psm1"
+
+    if ($Cert) {
+        # At this point the .psm1 is finalized, so let's sign it
+        try {
+            $SetAuthenticodeResult = Set-AuthenticodeSignature -FilePath "$ModuleRoot\$ModuleName.psm1" -cert $Cert
+            if (!$SetAuthenticodeResult -or $SetAuthenticodeResult.Status -eq "HasMisMatch") {throw}
+        }
+        catch {
+            Write-Error "Failed to sign '$ModuleName.psm1' with Code Signing Certificate! Invoke-Pester will not be able to load '$ModuleName.psm1'! Halting!"
+            $global:FunctionResult = "1"
+            return
+        }
+    }
+}
+
+Task Test -Depends Compile  {
     $lines
     "`n`tSTATUS: Testing with PowerShell $PSVersion"
 
@@ -76,6 +152,18 @@ Task Build -Depends Test {
     {
         "Failed to update version for '$env:BHProjectName': $_.`nContinuing with existing version"
     }
+
+    if ($Cert) {
+        Write-Host "hereDs"
+        # At this point the .psd1 is finalized, so let's sign it
+        try {
+            $SetAuthenticodeResult = Set-AuthenticodeSignature -FilePath "$ModuleRoot\$ModuleName.psd1" -cert $Cert
+            if (!$SetAuthenticodeResult -or $SetAuthenticodeResult.Status -eq "HasMisMatch") {throw}
+        }
+        catch {
+            "Failed to sign '$ModuleName.psd1' with Code Signing Certificate"
+        }
+    }
 }
 
 Task Deploy -Depends Build {
@@ -101,18 +189,11 @@ Task Deploy -Depends Build {
 
 
 
-
-
-
-
-
-
-
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUd9MaZWS8YpvEngu6g7CE4nzF
-# pJGgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUb6pprKCc9WL6wtEDgd01TGPX
+# 5h+gggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -169,11 +250,11 @@ Task Deploy -Depends Build {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFPNLpbc74u07Y4Ia
-# 027vqnkoIhPgMA0GCSqGSIb3DQEBAQUABIIBAAc3C/BFreJrTcgO9lWYi1hNdOkH
-# wg4AHQbx5TI8RUwoRnTCnSe+n36+gXvmXIK+FM29LFJYYfvqxMgt/ZBi74t8CSgC
-# aOyvDxaD56z0ht0x7RS62GlZZQdrHFC19SNHNPztosKMIGuZGUDYKWeRC4o/TP5b
-# q93zflfHLpwgjqtkYVAaMwTx1VlRP6IATKh0TWWCXsYQn11wATEmHLHFGtvDI1YM
-# LGtUAEHNHEJaZqHMwmgVqiemh1EB0NTkLGup7YqN0mLhCFSgfn99ba2qMZtl4TXQ
-# qnyLYtfGS9IVdiJzJmslLSAxJozYZTLiZ6eGZhm4Ef7U/J/+cUrttNNFeJY=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFHeh4NgtGBZDS7aW
+# MWOf3z9+LwKeMA0GCSqGSIb3DQEBAQUABIIBAIzj+XT/n4km3Cc/MFFWwaLM+L15
+# 2aKyXXi982YLEAHg7aUCV3Ek74tigk0/kZQ2yr+f/bNBoy/SK+sXv0MRugyV33rx
+# CwowRMB50gshLBg8S1+bAny6RYluLRJG4VBM2dZijTEUwdFzPeJKF/KbjQdVG/cb
+# pfiGq8Zzo4zp6/1K7EXCtYONQ2yt9GsAv9/ytDLpHmf3FfqsdWnR0PzgSrXapF6H
+# 7T3doq7QfzrZgxYpL+02I4tdBQUjYeIgM8AxDBPYnycuFuuKI+a+HUibydzOCqJR
+# JwPdZ0T2XnSD1a8CGBAAApXVAGP1xWFLF+kbQ+Ldb7i6T/BOJ7K+eVw/39M=
 # SIG # End signature block

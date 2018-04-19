@@ -1,6 +1,64 @@
 ﻿param(
-    $Task = 'Default'
+    [string]$Task = 'Default',
+    [string]$CertFileForSignature,
+    [System.Security.Cryptography.X509Certificates.X509Certificate2]$Cert
 )
+
+$ProjectRoot = $(Resolve-Path "$PSScriptRoot\..").Path
+$ModuleRoot = Split-Path $(Resolve-Path "$ProjectRoot\*\*.psm1")
+$ModuleName = $ModuleRoot | Split-Path -Leaf
+
+if ($CertFileForSignature -and !$Cert) {
+    if (!$(Test-Path $CertFileForSignature)) {
+        Write-Error "Unable to find the Certificate specified to be used for Code Signing! Halting!"
+        $global:FunctionResult = "1"
+        return
+    }
+
+    $Cert = Get-PfxCertificate $CertFileForSignature
+}
+if ($Cert) {
+    # We don't want to include the Module's .psm1 or .psd1 yet because the psake.ps1 Compile Task hasn't finalized them yet...
+    $FilesToSign = Get-ChildItem $ProjectRoot -Recurse -File | Where-Object {
+        $_.Extension -match "\.ps1|\.psd1|\.psm1" -and $_.Name -notmatch "^$ModuleName\.ps[d|m]1$"
+    }
+
+    # Since the Set-AuthenticodeSignature cmdlet eats the line above '# SIG...' in a file everytime it is used,
+    # we need to check the line befor '# SIG' to make sure it is empty before signing
+    [System.Collections.ArrayList]$FilesThatSetAuthentcodeWillBreak = @()
+    foreach ($FilePath in $FilesToSign.FullName) {
+        $FileContent = Get-Content $FilePath
+        $PrecedingLineIsBlank = [String]::IsNullOrWhiteSpace($($($FileContent | Select-String -Pattern "^# SIG # Begin signature block" -Context 1,0).Context.PreContext[0]))
+        if (!$PrecedingLineIsBlank) {
+            $null = $FilesThatSetAuthentcodeWillBreak.Add($FilePath)
+        }
+    }
+
+    if ($FilesThatSetAuthentcodeWillBreak.Count -gt 0) {
+        Write-Warning "The following files need additional New Lines so that the 'Set-Authenticode' cmdlet doesn't break functionality:`n$($FilesThatSetAuthentcodeWillBreak -join "`n")"
+        Write-Error "Need to add some New Lines in files to be signed by 'Set-Authenticode'! Halting!"
+        $global:FunctionResult = "1"
+        return
+    }
+    else {
+        [System.Collections.ArrayList]$FilesFailedToSign = @()
+        foreach ($FilePath in $FilesToSign.FullName) {
+            try {
+                $SetAuthenticodeResult = Set-AuthenticodeSignature -FilePath $FilePath -cert $Cert
+                if (!$SetAuthenticodeResult -or $SetAuthenticodeResult.Status -eq "HasMisMatch") {throw}
+            }
+            catch {
+                $null - $FilesFailedToSign.Add($FilePath)
+            }
+        }
+
+        if ($FilesFailedToSign.Count -gt 0) {
+            Write-Error "Halting because we failed to digitally sign the following files:`n$($FilesFailedToSign -join "`n")"
+            $global:FunctionResult = "1"
+            return
+        }
+    }
+}
 
 # dependencies
 Get-PackageProvider -Name NuGet -ForceBootstrap | Out-Null
@@ -13,7 +71,21 @@ $null = Invoke-PSDepend -Path "$PSScriptRoot\build.requirements.psd1" -Install -
 
 Set-BuildEnvironment -Force -Path $PSScriptRoot\..
 
-Invoke-psake $PSScriptRoot\psake.ps1 -taskList $Task -nologo
+$InvokePSakeParamsSplatParams = @{}
+if ($CertFileForSignature) {
+    $InvokePSakeParamsSplatParams.Add("CertFileForSignature",$CertFileForSignature)
+}
+if ($Cert) {
+    $InvokePSakeParamsSplatParams.Add("Cert",$Cert)
+}
+
+if ($InvokePSakeParamsSplatParams.Count -gt 0) {
+    Invoke-psake $PSScriptRoot\psake.ps1 -taskList $Task -nologo -parameters $InvokePSakeParamsSplatParams
+}
+else {
+    Invoke-psake $PSScriptRoot\psake.ps1 -taskList $Task -nologo
+}
+
 exit ( [int]( -not $psake.build_success ) )
 
 
@@ -36,8 +108,8 @@ exit ( [int]( -not $psake.build_success ) )
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQU9vseHCIX8YkYpdQHOdEQcrL6
-# Fp+gggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUyc/0eNP8paI3/XfgFe3MZYe0
+# ZTCgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -94,11 +166,11 @@ exit ( [int]( -not $psake.build_success ) )
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFM91dcd/KZTvd9TE
-# bJAGpzdxs5tuMA0GCSqGSIb3DQEBAQUABIIBAF9hQr+dV7rEOfXEnORmUKA5RQ2m
-# BW3gh665gMi55rKb3JrV09Xf9mmFS9fRdWLDv8iomby/nO24t0AF4LZt6rdpT2Sp
-# l9zUau9ievhqo3qchOtG8cvWG2Lo/E3Y2VQw1oirDHhXomBO7BpvSY/o0aHGZCu8
-# bkiAGEeru+9SAyTTFHUGlN6QZF4XjhMuBqFBs4upMFG8xGUv8TRDI9tWjm886KyS
-# liDKaF1whnO/UqHAtK/XYacSk2KqJK21y7yP/euiJ8uh3gwsBpEv+YFUgkyk4OhX
-# uorQH19MMxQRU4Q0OUOXt574i+w+U8goHug7rUj0r5/PmtzOeGCr//IP6tI=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFFODfzYfMlyIPIUB
+# x+pjUSWmjVgQMA0GCSqGSIb3DQEBAQUABIIBAAZe0EGUPrfW+MqTFOoadGrebuXs
+# 4cR5w+mmHRxOUHozTOUpWtxnN7NuROSQe7JDFjvEMkWpaSK0nNefu9QQMwcSN1XA
+# ViBX9G6kK8a4cH/jF8JBh9nBf76ooKxLtwXjFu9QCK6skM8CmZ/rMKdH7nRg2NqW
+# YG7ISmF+ifxqmtcGLDBVclFcn6tGrLnxI7i3k+XBwqHxesHkaSinqKny8YOPhipW
+# BN5hN0FMAmNIWsMx1fuiVuQQIT8OT4KdmVAWv4s5yuVute9s8yaoIIQVSYWvdvpA
+# CKQ+PCaz2Y9D3tLdpi0v3TOHsuQZNFLVjvFJgkrT0RCQT/PPB89XGaKe2HA=
 # SIG # End signature block

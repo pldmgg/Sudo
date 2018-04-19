@@ -1,70 +1,62 @@
-    <#
-    .SYNOPSIS
-        Bootstrap PSDepend
+<#
+.SYNOPSIS
+    Bootstrap PSDepend
 
-    .DESCRIPTION
-        Bootstrap PSDepend
+.DESCRIPTION
+    Bootstrap PSDepend
 
-        Why? No reliance on PowerShellGallery
+    Why? No reliance on PowerShellGallery
 
-          * Downloads nuget to your ~\ home directory
-          * Creates $Path (and full path to it)
-          * Downloads module to $Path\PSDepend
-          * Moves nuget.exe to $Path\PSDepend (skips nuget bootstrap on initial PSDepend import)
+        * Downloads nuget to your ~\ home directory
+        * Creates $Path (and full path to it)
+        * Downloads module to $Path\PSDepend
+        * Moves nuget.exe to $Path\PSDepend (skips nuget bootstrap on initial PSDepend import)
 
-    .PARAMETER Path
-        Module path to install PSDepend
+.PARAMETER Path
+    Module path to install PSDepend
 
-        Defaults to Profile\Documents\WindowsPowerShell\Modules
+    Defaults to Profile\Documents\WindowsPowerShell\Modules
 
-    .EXAMPLE
-        .\Install-PSDepend.ps1 -Path C:\Modules
+.EXAMPLE
+    .\Install-PSDepend.ps1 -Path C:\Modules
 
-        # Installs to C:\Modules\PSDepend
-    #>
-    [cmdletbinding()]
-    param(
-        [string]$Path = $( Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'WindowsPowerShell\Modules')
-    )
-    $ExistingProgressPreference = "$ProgressPreference"
-    $ProgressPreference = 'SilentlyContinue'
-    try {
-        # Bootstrap nuget if we don't have it
-        if(-not ($NugetPath = (Get-Command 'nuget.exe' -ErrorAction SilentlyContinue).Path)) {
-            $NugetPath = Join-Path $ENV:USERPROFILE nuget.exe
-            if(-not (Test-Path $NugetPath)) {
-                Invoke-WebRequest -uri 'https://dist.nuget.org/win-x86-commandline/latest/nuget.exe' -OutFile $NugetPath
-            }
-        }
-
-        # Bootstrap PSDepend, re-use nuget.exe for the module
-        if($path) { $null = mkdir $path -Force }
-        $NugetParams = 'install', 'PSDepend', '-Source', 'https://www.powershellgallery.com/api/v2/',
-                    '-ExcludeVersion', '-NonInteractive', '-OutputDirectory', $Path
-        & $NugetPath @NugetParams
-        if (!$(Test-Path "$(Join-Path $Path PSDepend)\nuget.exe")) {
-            Copy-Item -Path $NugetPath -Destination "$(Join-Path $Path PSDepend)\nuget.exe" -Force
+    # Installs to C:\Modules\PSDepend
+#>
+[cmdletbinding()]
+param(
+    [string]$Path = $( Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'WindowsPowerShell\Modules')
+)
+$ExistingProgressPreference = "$ProgressPreference"
+$ProgressPreference = 'SilentlyContinue'
+try {
+    # Bootstrap nuget if we don't have it
+    if(-not ($NugetPath = (Get-Command 'nuget.exe' -ErrorAction SilentlyContinue).Path)) {
+        $NugetPath = Join-Path $ENV:USERPROFILE nuget.exe
+        if(-not (Test-Path $NugetPath)) {
+            Invoke-WebRequest -uri 'https://dist.nuget.org/win-x86-commandline/latest/nuget.exe' -OutFile $NugetPath
         }
     }
-    finally {
-        $ProgressPreference = $ExistingProgressPreference
+
+    # Bootstrap PSDepend, re-use nuget.exe for the module
+    if($path) { $null = mkdir $path -Force }
+    $NugetParams = 'install', 'PSDepend', '-Source', 'https://www.powershellgallery.com/api/v2/',
+                '-ExcludeVersion', '-NonInteractive', '-OutputDirectory', $Path
+    & $NugetPath @NugetParams
+    if (!$(Test-Path "$(Join-Path $Path PSDepend)\nuget.exe")) {
+        Copy-Item -Path $NugetPath -Destination "$(Join-Path $Path PSDepend)\nuget.exe" -Force
     }
-
-
-
-
-
-
-
-
+}
+finally {
+    $ProgressPreference = $ExistingProgressPreference
+}
 
 
     
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQU/uGV/NDyEjkCdBS/5kDx0Et5
-# QJCgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUKszkc/uZRMGcDSHeMgrbvu1p
+# iDKgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -121,11 +113,11 @@
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFD2m+DyIRHgQyBdh
-# /833sOJq1UHiMA0GCSqGSIb3DQEBAQUABIIBAI1In6hDSIEud2rjGg8y0uJpHrEv
-# QgGb8dyub7OLZxjHLwlzuyFII3OUmMk+nHq5Q70OgesBsC+hhqPc9UXzPKnDw4Dc
-# pHyNzhyCLrO5F+OBW+00orHVEQhzV3C0Ru1EzFr/81qyerCBpTUJyhSIXGklmEs+
-# FWYVWYHYAjtuuPVy3Nz2xJsLWiSiGiztHsovXKrT7mNxAUBa0wCMbyIpMCVeNAyf
-# QOEuaDHrGZZmHTPOm8smDAjc4cJOR3z3eIwZBefASHrz7sHZp2C9U12wSKgxLJ1C
-# 0sF5kgRCd+RlkKIzN4eOT0QYBCnfBDky+ImQVRUFtQ6aUbUY7chfkz5oGAY=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFI24od0itel3fq5y
+# kqWpdfCpjWXLMA0GCSqGSIb3DQEBAQUABIIBAEHhrhnHZU6TZeyA4SexgTTXbAOM
+# hQ61Nup1eRZpj89EsRvqsUjthBz8VjWWK3lWQZ6GUGjwXXufHyO15JjEL51B6yYV
+# tUwtxIS1X/axrEIDJQsQHsYIht/BuN0v3cx/H/pnUXvGK4nkaXOzM5XEhDhA0mmN
+# VKJO3JDeORf3AxRMqF9NfG0DQAXKxpGs2/zzvGp+dJNOZO/khNAYnvKuRXQtmUNs
+# A01kqACl1zYks3zOTwEaSDXiFFoeOg3Vqgzg5H7mr5Tica1fBA9PkcovXGbgEjZD
+# ZOR7DQHO+eSqQT36k8uPfvorsN0uIDSAuJ0NzkoIcrhCUbdljC9LvnT1v1k=
 # SIG # End signature block
