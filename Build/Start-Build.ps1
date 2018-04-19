@@ -86,6 +86,20 @@ else {
     Invoke-psake $PSScriptRoot\psake.ps1 -taskList $Task -nologo
 }
 
+if ($Cert) {
+    # Sign the Module Manifest one more time because the version number was incremented via the Update-Metadata
+    # function in the BuildHelpers Module 
+    try {
+        $SetAuthenticodeResult = Set-AuthenticodeSignature -FilePath "$ModuleRoot\$ModuleName.psd1" -cert $Cert
+        if (!$SetAuthenticodeResult -or $SetAuthenticodeResult.Status -eq "HashMisMatch") {throw}
+    }
+    catch {
+        Write-Error "Problem with Set-Authenticode '$ModuleRoot\$ModuleName.psd1'! Halting!"
+        $global:FunctionResult = "1"
+        return
+    }
+}
+
 exit ( [int]( -not $psake.build_success ) )
 
 
@@ -108,8 +122,8 @@ exit ( [int]( -not $psake.build_success ) )
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUyc/0eNP8paI3/XfgFe3MZYe0
-# ZTCgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQULLX/PabaY0eXXjctTmpWaoPI
+# gE2gggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -166,11 +180,11 @@ exit ( [int]( -not $psake.build_success ) )
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFFODfzYfMlyIPIUB
-# x+pjUSWmjVgQMA0GCSqGSIb3DQEBAQUABIIBAAZe0EGUPrfW+MqTFOoadGrebuXs
-# 4cR5w+mmHRxOUHozTOUpWtxnN7NuROSQe7JDFjvEMkWpaSK0nNefu9QQMwcSN1XA
-# ViBX9G6kK8a4cH/jF8JBh9nBf76ooKxLtwXjFu9QCK6skM8CmZ/rMKdH7nRg2NqW
-# YG7ISmF+ifxqmtcGLDBVclFcn6tGrLnxI7i3k+XBwqHxesHkaSinqKny8YOPhipW
-# BN5hN0FMAmNIWsMx1fuiVuQQIT8OT4KdmVAWv4s5yuVute9s8yaoIIQVSYWvdvpA
-# CKQ+PCaz2Y9D3tLdpi0v3TOHsuQZNFLVjvFJgkrT0RCQT/PPB89XGaKe2HA=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFB5cu3nYq0qedctK
+# Vu5HD0km+GILMA0GCSqGSIb3DQEBAQUABIIBACNb9nWdtcqmdnDr3WmB/7ppC+Wy
+# 6En3wEQoqp57zKdgV43xM0oJRM0k2Wc3CLntc3jrC2Yt3CAdcIat2IB3zMlf5jgJ
+# kJAxh2Fs2NaX3GjuYocjBuYoAPlI7A0CvGYLUceXYnXyF5CrzY3cZhrnBL2VZf1g
+# I7LM0srFOQhmPdynIXzzIviJlU3u9QrQRrDWUCYYFxJtgZyHrucMJJ+PsvH2NpiJ
+# E0iv6jHzD/Ah73z9lIPmGoRNlK9R+YY13rpI9zlA2EOfq6YStX8/UVbW/Km2cil3
+# ObXbQemWNX8lxlAOZ/MsivueMhUqHHjdVSyyVEBCFtMvdVjybTktnntpJq4=
 # SIG # End signature block

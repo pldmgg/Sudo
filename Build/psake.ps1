@@ -97,7 +97,7 @@ foreach ($import in $Private) {
         # At this point the .psm1 is finalized, so let's sign it
         try {
             $SetAuthenticodeResult = Set-AuthenticodeSignature -FilePath "$ModuleRoot\$ModuleName.psm1" -cert $Cert
-            if (!$SetAuthenticodeResult -or $SetAuthenticodeResult.Status -eq "HasMisMatch") {throw}
+            if (!$SetAuthenticodeResult -or $SetAuthenticodeResult.Status -eq "HashMisMatch") {throw}
         }
         catch {
             Write-Error "Failed to sign '$ModuleName.psm1' with Code Signing Certificate! Invoke-Pester will not be able to load '$ModuleName.psm1'! Halting!"
@@ -154,11 +154,10 @@ Task Build -Depends Test {
     }
 
     if ($Cert) {
-        Write-Host "hereDs"
         # At this point the .psd1 is finalized, so let's sign it
         try {
             $SetAuthenticodeResult = Set-AuthenticodeSignature -FilePath "$ModuleRoot\$ModuleName.psd1" -cert $Cert
-            if (!$SetAuthenticodeResult -or $SetAuthenticodeResult.Status -eq "HasMisMatch") {throw}
+            if (!$SetAuthenticodeResult -or $SetAuthenticodeResult.Status -eq "HashMisMatch") {throw}
         }
         catch {
             "Failed to sign '$ModuleName.psd1' with Code Signing Certificate"
@@ -187,13 +186,11 @@ Task Deploy -Depends Build {
 
 
 
-
-
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUb6pprKCc9WL6wtEDgd01TGPX
-# 5h+gggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUL4l5QkpNK1Lp60YuHfZ4+CRa
+# ep6gggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -250,11 +247,11 @@ Task Deploy -Depends Build {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFHeh4NgtGBZDS7aW
-# MWOf3z9+LwKeMA0GCSqGSIb3DQEBAQUABIIBAIzj+XT/n4km3Cc/MFFWwaLM+L15
-# 2aKyXXi982YLEAHg7aUCV3Ek74tigk0/kZQ2yr+f/bNBoy/SK+sXv0MRugyV33rx
-# CwowRMB50gshLBg8S1+bAny6RYluLRJG4VBM2dZijTEUwdFzPeJKF/KbjQdVG/cb
-# pfiGq8Zzo4zp6/1K7EXCtYONQ2yt9GsAv9/ytDLpHmf3FfqsdWnR0PzgSrXapF6H
-# 7T3doq7QfzrZgxYpL+02I4tdBQUjYeIgM8AxDBPYnycuFuuKI+a+HUibydzOCqJR
-# JwPdZ0T2XnSD1a8CGBAAApXVAGP1xWFLF+kbQ+Ldb7i6T/BOJ7K+eVw/39M=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFCNNnLjVSK+XXgGu
+# fVQZ1TPOq8hSMA0GCSqGSIb3DQEBAQUABIIBAIpC8dgjdvT6EzHr3OTH9aG70ZrZ
+# 1mUtjBkhR/wnU8hdtQm3nLqUTJRmfB4F6cLBrJao5HiW3mMgETVNi0CCTZ3BPBCy
+# LFrOuwbgJOaapNF0JbOp7np1AZMTXZRR6H6E8/snfNdtGz0QtkrZGJ6jz3aozAGv
+# NBgF0cBQ6zVoVHOyypzW0W0wPhsyxq/6OwHAWV6GbGHQGOs3G3jxLu1LnwkYVFPI
+# jd3WmMDLkTajOzpqPYLHcQMVWUguIaEKBJvRTSrDexeI2p4tHxg3yRgJo8K5/uX2
+# DZByeP1CcinUfgywNHaHnfasuP2PsgSvpdb38ncO6Bdpo7a38eKy0t1mhxs=
 # SIG # End signature block
