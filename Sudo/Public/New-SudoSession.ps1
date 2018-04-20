@@ -100,7 +100,13 @@ function New-SudoSession {
             Mandatory=$False,
             ParameterSetName='Supply Credentials'
         )]
-        [System.Management.Automation.PSCredential]$Credentials
+        [System.Management.Automation.PSCredential]$Credentials,
+
+        # Meant for use within Start-SudoSession code. Suppresses warning message about the Elevated PSSession only
+        # being open for 3 minutes since that doesn't apply to the Start-SudoSession function (where it's only open
+        # for the duration of the scriptblock you run)
+        [Parameter(Mandatory=$False)]
+        [switch]$StartSudo
     )
 
     ##### BEGIN Variable/Parameter Transforms and PreRun Prep #####
@@ -340,7 +346,9 @@ function New-SudoSession {
     # Cleanup 
     Remove-Item $SystemConfigScriptFilePath
     
-    Write-Warning "The New SudoSession Named $($ElevatedPSSession.Name) with Id $($ElevatedPSSession.Id) will stay open for approximately 3 minutes!"
+    if (!$StartSudo) {
+        Write-Warning "The New SudoSession Named $($ElevatedPSSession.Name) with Id $($ElevatedPSSession.Id) will stay open for approximately 3 minutes!"
+    }
 
     ##### END Main Body #####
 
@@ -367,8 +375,8 @@ function New-SudoSession {
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQU2xFTDJA6aDcJJSURrsLoLEJ1
-# XKGgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUfkUOllHpLJfd52e36Kr4IuFr
+# JZygggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -425,11 +433,11 @@ function New-SudoSession {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFO4ihrZZMkAvWAIc
-# J7t7OmwPW6+SMA0GCSqGSIb3DQEBAQUABIIBACBEkENWyqw/m8D2/i2eqVaDvo0z
-# xwK2fXHVM0Ly2SGZFA9VHN7StlhO+zLnrFk6k6sdGIFg8DAy1UzwSRaIKJABBnoM
-# VexmBUUniU3GYRxr+ZMW5u2+CePBAcPl2W0UFf/Z6B/nJJ3NDeh+zjXMurVj+b2i
-# NIPmun9Ub8NMjcajZnmeNpFqJ/LDR6EmLW/IflKKPF2NolIS8N/fQQEhgn5XNCIX
-# 6Y00fy7fmMqL+glHYQeayHYG4BZ7Sa1JwAuQl9dlyUol7ARSJcesHP4Er7EbPH7y
-# iYmQdf/psh/cR/SJiW6SxsHGRp3b/EqjmGk2FUqyhpeFDf7bWhYikZA/ox8=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFOQ/I35QwGb6bwR9
+# iepXN8syvrSqMA0GCSqGSIb3DQEBAQUABIIBAJtNAQbRyEvX/Th3Td6y8acq8CJf
+# TM+59TAT7utcR5cPVY8Q/YaYZykdcY9ZM1tIEphAcnVWscXaU01AH/cEGhOosJ5x
+# rr3/WJzUprjJEUvDYBEIWnW4COSJ0+2zqXW9xSNCaViSu4MiAuyFGm15u7uVr0m7
+# ttCOnt7Vno5nteVUQApQHgN0doBxFSJL/UOMtW8jpYQoEbQ3AsoQk/jp8tDeL75W
+# 651o96v8zZ5J+XL+0N5WQacW6eTjo5m4l09THoKWPjA/KNzdJ0OOqbt1nVJZQnhF
+# H/y6uR2kQ64zGyk4j4GATJwNRJMys3aZ96mJ9QUfPEmqXdq81NcsMWg8ZRc=
 # SIG # End signature block

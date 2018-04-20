@@ -117,7 +117,13 @@ function New-SudoSession {
             Mandatory=$False,
             ParameterSetName='Supply Credentials'
         )]
-        [System.Management.Automation.PSCredential]$Credentials
+        [System.Management.Automation.PSCredential]$Credentials,
+
+        # Meant for use within Start-SudoSession code. Suppresses warning message about the Elevated PSSession only
+        # being open for 3 minutes since that doesn't apply to the Start-SudoSession function (where it's only open
+        # for the duration of the scriptblock you run)
+        [Parameter(Mandatory=$False)]
+        [switch]$StartSudo
     )
 
     ##### BEGIN Variable/Parameter Transforms and PreRun Prep #####
@@ -357,7 +363,9 @@ function New-SudoSession {
     # Cleanup 
     Remove-Item $SystemConfigScriptFilePath
     
-    Write-Warning "The New SudoSession Named $($ElevatedPSSession.Name) with Id $($ElevatedPSSession.Id) will stay open for approximately 3 minutes!"
+    if (!$StartSudo) {
+        Write-Warning "The New SudoSession Named $($ElevatedPSSession.Name) with Id $($ElevatedPSSession.Id) will stay open for approximately 3 minutes!"
+    }
 
     ##### END Main Body #####
 
@@ -443,7 +451,25 @@ function Remove-SudoSession {
         [System.Management.Automation.Runspaces.PSSession]$SessionToRemove,
 
         [Parameter(Mandatory=$False)]
-        $OriginalConfigInfo = $global:NewSessionAndOriginalStatus.WSManAndRegistryChanges
+        $OriginalConfigInfo = $global:NewSessionAndOriginalStatus.WSManAndRegistryChanges,
+
+        [Parameter(
+            Mandatory=$False,
+            ParameterSetName='Supply UserName and Password'
+        )]
+        [string]$UserName = $([System.Security.Principal.WindowsIdentity]::GetCurrent().Name -split "\\")[-1],
+
+        [Parameter(
+            Mandatory=$False,
+            ParameterSetName='Supply UserName and Password'
+        )]
+        [securestring]$Password,
+
+        [Parameter(
+            Mandatory=$False,
+            ParameterSetName='Supply Credentials'
+        )]
+        [System.Management.Automation.PSCredential]$Credentials
     )
 
     ##### BEGIN Variable/Parameter Transforms and PreRun Prep #####
@@ -464,85 +490,62 @@ function Remove-SudoSession {
     ##### BEGIN Main Body #####
 
     if ($OriginalConfigInfo -ne $null) {
-        # Use the existing SudoSession to revert Registry/WSMAN configs so that there's no UAC prompt
-        $SystemConfigSB = {
-            $OriginalConfigInfo = $using:OriginalConfigInfo
-
-            # Collect $Output as we go...
-            $Output = [ordered]@{}
-
-            if ($OriginalConfigInfo.WSMANServerCredSSPStateChange) {
-                Set-Item -Path "WSMan:\localhost\Service\Auth\CredSSP" -Value false
-                $Output.Add("CredSSPServer","Off")
-            }
-            if ($OriginalConfigInfo.WSMANClientCredSSPStateChange) {
-                Set-Item -Path "WSMan:\localhost\Client\Auth\CredSSP" -Value false
-                $Output.Add("CredSSPClient","Off")
-            }
-            if ($OriginalConfigInfo.WinRMStateChange) {
-                if ([bool]$(Test-WSMan -ErrorAction SilentlyContinue)) {
-                    try {
-                        Disable-PSRemoting -Force -ErrorAction Stop -WarningAction SilentlyContinue
-                        $Output.Add("PSRemoting","Disabled")
-                        Stop-Service winrm -ErrorAction Stop
-                        $Output.Add("WinRMService","Stopped")
-                        Set-Item "WSMan:\localhost\Service\AllowRemoteAccess" -Value false -ErrorAction Stop
-                        $Output.Add("WSMANServerAllowRemoteAccess",$False)
-                    }
-                    catch {
-                        Write-Error $_
-                        if ($Output.Count -gt 0) {[pscustomobject]$Output}
-                        $global:FunctionResult = "1"
-                        return
-                    }
-                }
-            }
-    
-            if ($OriginalConfigInfo.RegistryKeyPropertiesCreated.Count -gt 0) {
-                [System.Collections.ArrayList]$RegistryKeyPropertiesRemoved = @()
-
-                foreach ($Property in $OriginalConfigInfo.RegistryKeyPropertiesCreated) {
-                    $PropertyName = $($Property | Get-Member -Type NoteProperty | Where-Object {$_.Name -notmatch "PSPath|PSParentPath|PSChildName|PSDrive|PSProvider"}).Name
-                    $PropertyPath = $Property.PSPath
-    
-                    if (Test-Path $PropertyPath) {
-                        Remove-ItemProperty -Path $PropertyPath -Name $PropertyName
-                        $null = $RegistryKeyPropertiesRemoved.Add($Property)
-                    }
-                }
-
-                $Output.Add("RegistryKeyPropertiesRemoved",$RegistryKeyPropertiesRemoved)
-            }
-    
-            if ($OriginalConfigInfo.RegistryKeysCreated.Count -gt 0) {
-                [System.Collections.ArrayList]$RegistryKeysRemoved = @()
-
-                foreach ($RegKey in $OriginalConfigInfo.RegistryKeysCreated) {
-                    $RegPath = $RegKey.PSPath
-    
-                    if (Test-Path $RegPath) {
-                        Remove-Item $RegPath -Recurse -Force
-                        $null = $RegistryKeysRemoved.Add($RegKey)
-                    }
-                }
-
-                $Output.Add("RegistryKeysRemoved",$RegistryKeysRemoved)
-            }
-
-            if ($Output.Count -gt 0) {
-                [pscustomobject]$Output
-            }
+        $RestoreOriginalSystemConfigSplatParams = @{
+            ExistingSudoSession     = $SessionToRemove
+            OriginalConfigInfo      = $OriginalConfigInfo
+            ErrorAction             = "Stop"
         }
 
-        $CurrentUser = $($(whoami) -split "\\")[-1]
-        $SudoSessionFolder = "$HOME\SudoSession_$CurrentUser`_$(Get-Date -Format MMddyyy)"
-        if (!$(Test-Path $SudoSessionFolder)) {
-            $SudoSessionFolder = $(New-Item -ItemType Directory -Path $SudoSessionFolder).FullName
-        }
-        $SudoSessionRevertChangesPSObject = "$SudoSessionFolder\SudoSession_Config_Revert_Changes_$CurrentUser`_$(Get-Date -Format MMddyyy_hhmmss).xml"
+        if ($SessionToRemove.State -ne "Opened") {
+            if ($global:SudoCredentials) {
+                if (!$Credentials) {
+                    if ($Username -match "\\") {
+                        $UserName = $($UserName -split "\\")[-1]
+                    }
+                    if ($global:SudoCredentials.UserName -match "\\") {
+                        $SudoUserName = $($global:SudoCredentials.UserName -split "\\")[-1]
+                    }
+                    else {
+                        $SudoUserName = $global:SudoCredentials.UserName
+                    }
+                    if ($SudoUserName -match $UserName) {
+                        $Credentials = $global:SudoCredentials
+                    }
+                }
+                else {
+                    if ($global:SudoCredentials.UserName -ne $Credentials.UserName) {
+                        $global:SudoCredentials = $Credentials
+                    }
+                }
+            }
+        
+            if (!$Credentials) {
+                if (!$Password) {
+                    $Password = Read-Host -Prompt "Please enter the password for $UserName" -AsSecureString
+                }
+                $Credentials = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $UserName, $Password
+            }
+        
+            if ($Credentials.UserName -match "\\") {
+                $UserName = $($Credentials.UserName -split "\\")[-1]
+            }
+            if ($Username -match "\\") {
+                $UserName = $($UserName -split "\\")[-1]
+            }
+        
+            $global:SudoCredentials = $null
 
-        $WSMandAndRegistryRevertChangesResult = Invoke-Command -Session $SessionToRemove -Scriptblock $SystemConfigSB
-        $WSMandAndRegistryRevertChangesResult | Export-CliXml $SudoSessionRevertChangesPSObject
+            $RestoreOriginalSystemConfigSplatParams.Add("Credentials",$Credentials)
+        }
+
+        try {
+            Restore-OriginalSystemConfig @RestoreOriginalSystemConfigSplatParams
+        }
+        catch {
+            Write-Error $_
+            $global:FunctionResult = "1"
+            return
+        }
     }
 
     try {
@@ -1125,7 +1128,7 @@ function Start-SudoSession {
 
     ##### BEGIN Main Body #####
 
-    $SudoSessionInfo = New-SudoSession -Credentials $Credentials
+    $SudoSessionInfo = New-SudoSession -Credentials $Credentials -StartSudo
     $ElevatedPSSession = $SudoSessionInfo.ElevatedPSSession
 
     if ($StringExpression) {
@@ -1166,8 +1169,8 @@ function Start-SudoSession {
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUoCWsFP6kD30+8RzDRScRqNcS
-# jrygggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQU73aZT1jtWRmb3Pu6cQBM1dsp
+# b/+gggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -1224,11 +1227,11 @@ function Start-SudoSession {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFBwU3hMv8UJbtAo2
-# o7fuQ9IE61PQMA0GCSqGSIb3DQEBAQUABIIBACFwb3wtpTCaNNBJRWuZOdKIhP/S
-# JhWKL9U+X+FcXuYna+nNMu65h7Gr0pOBAxewMi5M7UdB2EGhlbCXtGnWOkFMuNkK
-# rFIz52YnmOyTVzOpVzjv9jNAHI14CJq8HPfG4PcCFWt+oT5uBK3TtPZvGa/XPt9a
-# Ul5YJjzuEQYo4xTfKxKKc+C1S3lMEp+04sBqGZwfZ6CXGOO+5bgd9YPK5emFE9HV
-# bHG0RolmC/s8L/TdbD7o4IAzVcBGQhPqaVTVuk860H381wbOmJmiwB4DRZ+YF380
-# qgT+YyGhQjQax0bmf32DHcMrgjDV7anU8gugc+z2kItchND7//8owxIsjaM=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFH7Y+3kM94T8M4GS
+# p6e2q54Wc6uuMA0GCSqGSIb3DQEBAQUABIIBAFkeK8/+HvvNk8+XUSEWs/iNpYVA
+# EM9CUAvhmlFLqr4HyeeIVckVehVUhF7efnwtKIP22SnPegjL8xlb2Pkx5rR9E7wL
+# CRSFFd/+M/tVpK3MANEEJAJuzsR3Sl2l/don7e/GdNKrMn4mblrDcWzAJoexR0P+
+# spS/Hw+xvsCpP+nV4pXhtmsnUj983Ybte00bBPVAmyw1P3tb03It3SiOG7zKFccJ
+# L+Yae6mWhmKiFyUswTSlI+tn/NuR+JSNgAIX6433J3EyqQNEZlcB8/5v03lB8x8s
+# L0uhLEzBhJhsWLSKW8Q5EBHWLSnWj1eEQjYIOQpuBLHCIbIsff11qczoEb8=
 # SIG # End signature block
