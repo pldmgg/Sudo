@@ -119,6 +119,12 @@ function New-SudoSession {
         )]
         [System.Management.Automation.PSCredential]$Credentials,
 
+        # If this switch is not used, then the New SudoSession will only stay open for ~3 minutes.
+        # IMPORTANT NOTE: If it IS used, then either the 'Remove-SudoSession' or 'Restore-OriginalSystemConfig' functions
+        # MUST be used to revert WSMAN and/or CredSSP configurations to what ther were prior to using the 'New-SudoSession' function 
+        [Parameter(Mandatory=$False)]
+        [switch]$KeepOpen,
+
         # Meant for use within Start-SudoSession code. Suppresses warning message about the Elevated PSSession only
         # being open for 3 minutes since that doesn't apply to the Start-SudoSession function (where it's only open
         # for the duration of the scriptblock you run)
@@ -337,16 +343,22 @@ function New-SudoSession {
 
     $ElevatedPSSession = New-PSSession -Name "Sudo$UserName" -Authentication CredSSP -Credential $Credentials
 
-    try {
-        $RestoreOriginalSystemConfig = Restore-OriginalSystemConfig -OriginalConfigInfo $SystemConfigScriptResult -ExistingSudoSession $ElevatedPSSession
-        if (!$RestoreOriginalSystemConfig) {throw "Problem restoring original WSMAN and CredSSP system config! See '$SudoSessionChangesPSObject' for information about what was changed."}
-        
-        $SudoSessionRevertChangesPSObject = $($(Resolve-Path "$SudoSessionFolder\SudoSession_Config_Revert_Changes_*.xml").Path | foreach {
-            Get-Item $_
-        } | Sort-Object -Property CreationTime)[-1]
+    if (!$KeepOpen) {
+        try {
+            $RestoreOriginalSystemConfig = Restore-OriginalSystemConfig -OriginalConfigInfo $SystemConfigScriptResult -ExistingSudoSession $ElevatedPSSession
+            if (!$RestoreOriginalSystemConfig) {throw "Problem restoring original WSMAN and CredSSP system config! See '$SudoSessionChangesPSObject' for information about what was changed."}
+            
+            $SudoSessionRevertChangesPSObject = $($(Resolve-Path "$SudoSessionFolder\SudoSession_Config_Revert_Changes_*.xml").Path | foreach {
+                Get-Item $_
+            } | Sort-Object -Property CreationTime)[-1]
+        }
+        catch {
+            Write-Warning $_.Exception.Message
+        }
     }
-    catch {
-        Write-Warning $_.Exception.Message
+    else {
+        $WrnMsg = "Please be sure to run `Remove-SudoSession -SessionToRemove '`$(Get-PSSession -Id $($ElevatedPSSession.Id))' before you " +
+        "close PowerShell in order to remove the SudoSession and revert WSMAN and CredSSP configuration changes."
     }
 
     New-Variable -Name "NewSessionAndOriginalStatus" -Scope Global -Value $(
@@ -363,8 +375,8 @@ function New-SudoSession {
     # Cleanup 
     Remove-Item $SystemConfigScriptFilePath
     
-    if (!$StartSudo) {
-        Write-Warning "The New SudoSession Named $($ElevatedPSSession.Name) with Id $($ElevatedPSSession.Id) will stay open for approximately 3 minutes!"
+    if (!$StartSudo -or !$KeepOpen) {
+        Write-Warning "The New SudoSession named '$($ElevatedPSSession.Name)' with Id '$($ElevatedPSSession.Id)' will stay open for approximately 3 minutes!"
     }
 
     ##### END Main Body #####
@@ -1169,8 +1181,8 @@ function Start-SudoSession {
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQU73aZT1jtWRmb3Pu6cQBM1dsp
-# b/+gggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUBhAYwMqLgHepJC43Sb1PdD3L
+# +JWgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -1227,11 +1239,11 @@ function Start-SudoSession {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFH7Y+3kM94T8M4GS
-# p6e2q54Wc6uuMA0GCSqGSIb3DQEBAQUABIIBAFkeK8/+HvvNk8+XUSEWs/iNpYVA
-# EM9CUAvhmlFLqr4HyeeIVckVehVUhF7efnwtKIP22SnPegjL8xlb2Pkx5rR9E7wL
-# CRSFFd/+M/tVpK3MANEEJAJuzsR3Sl2l/don7e/GdNKrMn4mblrDcWzAJoexR0P+
-# spS/Hw+xvsCpP+nV4pXhtmsnUj983Ybte00bBPVAmyw1P3tb03It3SiOG7zKFccJ
-# L+Yae6mWhmKiFyUswTSlI+tn/NuR+JSNgAIX6433J3EyqQNEZlcB8/5v03lB8x8s
-# L0uhLEzBhJhsWLSKW8Q5EBHWLSnWj1eEQjYIOQpuBLHCIbIsff11qczoEb8=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFDrYsn34LOFQcNcG
+# ZM83vPp9Rz93MA0GCSqGSIb3DQEBAQUABIIBAJ3phnTOhT7aF4cO0M1ZfJj4C8XJ
+# JdkL+KFM/GehrOIW1tqJNlAgIi6yODzi1hYL42ha19bsRa3TXeAOk4RG//5RAeF6
+# Hr96it2kOhLeAIKOUZCTHe1J5+E6nAsWLl8aOCTL2UDBNqq9MWas8fO2crYU5KLo
+# NCInRobo5zAm5wGjRNFrgVJx/bJ06lqQiq7FT4yjnnPuseTGrhGrVicRI2RjF8Qc
+# BiR+d2Lsx4gMAROpbnlLfcXw7D4IvSGApPY05GuRgAvRVoTfjN5KNDXa7mdd1NcH
+# NqNin9qBqMeAkBnhLVFuQ6oDfBKKcG8lbW6BAa6ranAHxj3hjSuSZL0wHV8=
 # SIG # End signature block
