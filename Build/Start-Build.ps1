@@ -86,6 +86,7 @@ else {
     Invoke-psake $PSScriptRoot\psake.ps1 -taskList $Task -nologo
 }
 
+<#
 if ($Cert) {
     # Sign the Module Manifest one more time because the version number was incremented via the Update-Metadata
     # function in the BuildHelpers Module 
@@ -99,6 +100,7 @@ if ($Cert) {
         return
     }
 }
+#>
 
 exit ( [int]( -not $psake.build_success ) )
 
@@ -122,8 +124,8 @@ exit ( [int]( -not $psake.build_success ) )
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQULLX/PabaY0eXXjctTmpWaoPI
-# gE2gggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUV8iYzvcOSY7Ntb5InSKLLC14
+# e1qgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -180,11 +182,11 @@ exit ( [int]( -not $psake.build_success ) )
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFB5cu3nYq0qedctK
-# Vu5HD0km+GILMA0GCSqGSIb3DQEBAQUABIIBACNb9nWdtcqmdnDr3WmB/7ppC+Wy
-# 6En3wEQoqp57zKdgV43xM0oJRM0k2Wc3CLntc3jrC2Yt3CAdcIat2IB3zMlf5jgJ
-# kJAxh2Fs2NaX3GjuYocjBuYoAPlI7A0CvGYLUceXYnXyF5CrzY3cZhrnBL2VZf1g
-# I7LM0srFOQhmPdynIXzzIviJlU3u9QrQRrDWUCYYFxJtgZyHrucMJJ+PsvH2NpiJ
-# E0iv6jHzD/Ah73z9lIPmGoRNlK9R+YY13rpI9zlA2EOfq6YStX8/UVbW/Km2cil3
-# ObXbQemWNX8lxlAOZ/MsivueMhUqHHjdVSyyVEBCFtMvdVjybTktnntpJq4=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFHxJyw2mJ85NULwN
+# +W2iCBkBz9vTMA0GCSqGSIb3DQEBAQUABIIBAB2AYLk4u/oxK404ModwMVunlFAe
+# 5ilGDqx+rf9aW0RlcUbCpymToJ7D58o0qqt+4OMLXQkvVr8rBBNOOQL8yC4tBwKx
+# mx31DfGcaow9DNMaRz6vPpx5NlmaTTDFKWv73o0zClt0v82RpUOavsqFnRakYwwo
+# aQVO9YYCq6n1RbsceIv/BXQyxe9lvjg6xd0Fb6aCAbQ7MtPMSWf5vEDYxFIwWyhW
+# 0GHsGTXENNqsfAYTmBfYtfWA3d5cNWsH17ReZcZaK3U+5rB5z0azk8jPXb71scV+
+# yR6xNnMPvRECVa7mhouteWXyJqvfaLEBmV7GVfYTfxfQUqa9R6ZTHLt35+U=
 # SIG # End signature block
