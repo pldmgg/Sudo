@@ -137,7 +137,7 @@ Task Build -Depends Test {
     $lines
     
     # Load the module, read the exported functions, update the psd1 FunctionsToExport
-    Set-ModuleFunctions
+    #Set-ModuleFunctions
 
     # Bump the module version if we didn't already
     Try
@@ -167,7 +167,6 @@ Task Build -Depends Test {
 
 Task Deploy -Depends Build {
     $lines
-    "$ProjectRoot\Build"
 
     $Params = @{
         Path = "$ProjectRoot\Build"
@@ -185,12 +184,11 @@ Task Deploy -Depends Build {
 
 
 
-
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQU/0PIZN789u9Qa0IFFO0k6FVF
-# Bpegggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUo9CFKRbkzQ9vlTz39V3XMFR/
+# dC6gggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -247,11 +245,11 @@ Task Deploy -Depends Build {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFCKbBuu5pFnA3+Zz
-# dAEksYqnycjGMA0GCSqGSIb3DQEBAQUABIIBAIDqJG0m1kT6k3Gp6KhcTEHB3Lhi
-# 8zqrB6iUx3DIIJUQNdF/Ce/b85Cci9t8AgUJOrL+zOD2sdCayxyxPkVV/Kl57NLl
-# tn821+AoRNoAxC4IQYJslmxfnVX2iaptM4FYC+L5KkE2lOhwQYgEVIE+poSG0wCe
-# yRzObmYKUAjqL31e4XwkXL/0nhNLaUlT8mN1nybGAUysFcq4sBSOXywILkAqThNw
-# k92zJO3YgPeBwCaB4FzMbh5qvpax3qlwRASArt4TJqZtDxr7xH7FMezijRYZDGYU
-# o4RW5v6yHjyzDAxkS+H0JiTJMhgT6v08R8T15O4vwf5VGeQCvOy029lzORM=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFEBXpXrCHYBx+xhh
+# qUjVnphDqwrEMA0GCSqGSIb3DQEBAQUABIIBAFf5Xr9AfAO7Z52E9nCNnhBSZMO3
+# +kuJToKx4D36r934dFmoCAHWxSCbsLgJ/t7IfMfNv8azbWk991QXpZbkOk1OPq23
+# r/dS4Vh1KWtekdGryfBFSx6L8Yv2s3g6WlmImtWCb9CLsCPOLboHbwsL/uFnjpC9
+# jdnYsi9w8qojnrgSqNqplfSS3Ybf/PTTAsEHV0dmtFRhRrxl97swtfrBlTysZCEA
+# AhCG6ZtvFnBH4fTDedgAyXeYTpsaqmKseQUFVq01IbKg5R98gpdlpHwf5UljZMyE
+# kE8Lh9LaV+mZ3qBd3dMlSvqTnirq1ag5K4pTtsZaX9xlN7Ozuew5V7OTP2k=
 # SIG # End signature block
