@@ -12,7 +12,7 @@ IMPORTANT NOTE: Functions in this Module will NOT run in a PowerShell Session th
 # One time setup
     # Download the repository
     # Unblock the zip
-    # Extract the Sudo folder to a module path (e.g. $env:USERPROFILE\Documents\WindowsPowerShell\Modules)
+    # Extract the Sudo folder to a module path (e.g. $env:USERPROFILE\Documents\WindowsPowerShell\Modules\)
 # Or, with PowerShell 5 or later or PowerShellGet:
     Install-Module Sudo
 
