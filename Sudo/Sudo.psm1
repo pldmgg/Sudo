@@ -375,7 +375,7 @@ function New-SudoSession {
     # Cleanup 
     Remove-Item $SystemConfigScriptFilePath
     
-    if (!$StartSudo -or !$KeepOpen) {
+    if (!$($StartSudo -or $KeepOpen)) {
         Write-Warning "The New SudoSession named '$($ElevatedPSSession.Name)' with Id '$($ElevatedPSSession.Id)' will stay open for approximately 3 minutes!"
     }
 
@@ -738,8 +738,10 @@ function Restore-OriginalSystemConfig {
                 $PropertyPath = $Property.PSPath
 
                 if (Test-Path $PropertyPath) {
-                    Remove-ItemProperty -Path $PropertyPath -Name $PropertyName
-                    $null = $RegistryKeyPropertiesRemoved.Add($Property)
+                    if ([bool]$(Get-ItemProperty -Path $PropertyPath -Name $PropertyName -ErrorAction SilentlyContinue)) {
+                        Remove-ItemProperty -Path $PropertyPath -Name $PropertyName
+                        $null = $RegistryKeyPropertiesRemoved.Add($Property)
+                    }
                 }
             }
 
@@ -812,8 +814,10 @@ function Restore-OriginalSystemConfig {
                         $PropertyPath = $Property.PSPath
         
                         if (Test-Path $PropertyPath) {
-                            Remove-ItemProperty -Path $PropertyPath -Name $PropertyName
-                            $null = $RegistryKeyPropertiesRemoved.Add($Property)
+                            if ([bool]$(Get-ItemProperty -Path $PropertyPath -Name $PropertyName -ErrorAction SilentlyContinue)) {
+                                Remove-ItemProperty -Path $PropertyPath -Name $PropertyName
+                                $null = $RegistryKeyPropertiesRemoved.Add($Property)
+                            }
                         }
                     }
 
@@ -899,10 +903,16 @@ function Restore-OriginalSystemConfig {
                 $PropertyPath = $Property.PSPath
 
                 if (Test-Path $PropertyPath) {
-                    $Line = "if ([bool](Get-ItemProperty -Path '$PropertyPath' -Name '$PropertyName' -EA SilentlyContinue)) {`$null = `$RegistryKeyPropertiesRemoved.Add((Get-ItemProperty -Path '$PropertyPath' -Name '$PropertyName'))}"
-                    $null = $SystemConfigScript.Add($Line)
-                    $Line = "Remove-ItemProperty -Path '$PropertyPath' -Name '$PropertyName'"
-                    $null = $SystemConfigScript.Add($Line)
+                    $MoreLinesToAdd = @(
+                        "if ([bool](Get-ItemProperty -Path '$PropertyPath' -Name '$PropertyName' -EA SilentlyContinue)) {"
+                        "    `$null = `$RegistryKeyPropertiesRemoved.Add((Get-ItemProperty -Path '$PropertyPath' -Name '$PropertyName'))"
+                        "    Remove-ItemProperty -Path '$PropertyPath' -Name '$PropertyName'"
+                        "}"
+                    )
+
+                    foreach ($Line in $MoreLinesToAdd) {
+                        $null = $SystemConfigScript.Add($Line)
+                    }
                 }
             }
 
@@ -1181,8 +1191,8 @@ function Start-SudoSession {
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUBhAYwMqLgHepJC43Sb1PdD3L
-# +JWgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUCwuICje6NOvKX0vDGQtzVzeW
+# z56gggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -1239,11 +1249,11 @@ function Start-SudoSession {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFDrYsn34LOFQcNcG
-# ZM83vPp9Rz93MA0GCSqGSIb3DQEBAQUABIIBAJ3phnTOhT7aF4cO0M1ZfJj4C8XJ
-# JdkL+KFM/GehrOIW1tqJNlAgIi6yODzi1hYL42ha19bsRa3TXeAOk4RG//5RAeF6
-# Hr96it2kOhLeAIKOUZCTHe1J5+E6nAsWLl8aOCTL2UDBNqq9MWas8fO2crYU5KLo
-# NCInRobo5zAm5wGjRNFrgVJx/bJ06lqQiq7FT4yjnnPuseTGrhGrVicRI2RjF8Qc
-# BiR+d2Lsx4gMAROpbnlLfcXw7D4IvSGApPY05GuRgAvRVoTfjN5KNDXa7mdd1NcH
-# NqNin9qBqMeAkBnhLVFuQ6oDfBKKcG8lbW6BAa6ranAHxj3hjSuSZL0wHV8=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFAGVTKEfXXCh5YX6
+# xhw9CX9ycrlQMA0GCSqGSIb3DQEBAQUABIIBAA+w5vFQUt0nbcNVXcIeH+YjbgH5
+# VcPTSIhZTk9kLj5wnj/gzEy5DmxzvClhWzGyq/J6bl85+mLWBDeB67OxCsoaAfoI
+# pnxABEQ7jSQNWqzn3OZDm0ekuvt59DtYaHlqnB6CzAkCRQDQBeXZyzFEGs215Q9T
+# YztmFtvVkJBv4OLX0pgGrsZh01O2DYnH6PWDmjWdwIts5baNAQ7/+QU8AwyttD0V
+# WdT32ZLeQ0f932xl++egJ9lDH1reiQorYJaF1te2NPPppmSqirRiZ6uxQVFVrlF/
+# ujIkQB781Var1wYQ86Fg4G5xD7JdctNXNQW2DucfTtntjAzbU1bg8BJz8qc=
 # SIG # End signature block

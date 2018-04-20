@@ -162,8 +162,10 @@ function Restore-OriginalSystemConfig {
                 $PropertyPath = $Property.PSPath
 
                 if (Test-Path $PropertyPath) {
-                    Remove-ItemProperty -Path $PropertyPath -Name $PropertyName
-                    $null = $RegistryKeyPropertiesRemoved.Add($Property)
+                    if ([bool]$(Get-ItemProperty -Path $PropertyPath -Name $PropertyName -ErrorAction SilentlyContinue)) {
+                        Remove-ItemProperty -Path $PropertyPath -Name $PropertyName
+                        $null = $RegistryKeyPropertiesRemoved.Add($Property)
+                    }
                 }
             }
 
@@ -236,8 +238,10 @@ function Restore-OriginalSystemConfig {
                         $PropertyPath = $Property.PSPath
         
                         if (Test-Path $PropertyPath) {
-                            Remove-ItemProperty -Path $PropertyPath -Name $PropertyName
-                            $null = $RegistryKeyPropertiesRemoved.Add($Property)
+                            if ([bool]$(Get-ItemProperty -Path $PropertyPath -Name $PropertyName -ErrorAction SilentlyContinue)) {
+                                Remove-ItemProperty -Path $PropertyPath -Name $PropertyName
+                                $null = $RegistryKeyPropertiesRemoved.Add($Property)
+                            }
                         }
                     }
 
@@ -323,10 +327,16 @@ function Restore-OriginalSystemConfig {
                 $PropertyPath = $Property.PSPath
 
                 if (Test-Path $PropertyPath) {
-                    $Line = "if ([bool](Get-ItemProperty -Path '$PropertyPath' -Name '$PropertyName' -EA SilentlyContinue)) {`$null = `$RegistryKeyPropertiesRemoved.Add((Get-ItemProperty -Path '$PropertyPath' -Name '$PropertyName'))}"
-                    $null = $SystemConfigScript.Add($Line)
-                    $Line = "Remove-ItemProperty -Path '$PropertyPath' -Name '$PropertyName'"
-                    $null = $SystemConfigScript.Add($Line)
+                    $MoreLinesToAdd = @(
+                        "if ([bool](Get-ItemProperty -Path '$PropertyPath' -Name '$PropertyName' -EA SilentlyContinue)) {"
+                        "    `$null = `$RegistryKeyPropertiesRemoved.Add((Get-ItemProperty -Path '$PropertyPath' -Name '$PropertyName'))"
+                        "    Remove-ItemProperty -Path '$PropertyPath' -Name '$PropertyName'"
+                        "}"
+                    )
+
+                    foreach ($Line in $MoreLinesToAdd) {
+                        $null = $SystemConfigScript.Add($Line)
+                    }
                 }
             }
 
@@ -416,8 +426,8 @@ function Restore-OriginalSystemConfig {
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUGvJ2bfwkuJMUv/WnZo4U7vW0
-# 04igggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUWSp8cZiPBXguyo8VDlQQV2Rs
+# OFmgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -474,11 +484,11 @@ function Restore-OriginalSystemConfig {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFGEIKFWKyqLipkht
-# lwpUgRTlX/OnMA0GCSqGSIb3DQEBAQUABIIBALTS9uvD2NhHBu7jFZzpA649FpMR
-# OcfFHft7Bkll+u4apf9QjB++agXigTGysuyMFCrs3nAY+Z9eMr9lS8qRC/ab/VcO
-# 4/8Ugctm0EwM9FgkgHcqtw0Q33e2SvmLRjxzdZkOYy2ewhMtO0n9ykAOL5BvhoBN
-# CyKoc9+BUUFf1FjRQ3/oZE5JZMt3Mrh2KK1kNGQFJP46BWSubaCF+gT94JlynsDK
-# ud0CMzdteenrKY/yJgw8w3M8u7mcDc3kyurrxMdW2Wba/u/KRyB5L6Bj8tntlVGF
-# J5movRUIO9pHLd2yRe/JDq0u3UlCw+njqtjF4NTVi5uZRm4hALvSERksQrw=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFDKF/C/dJNEfXpc6
+# smeAI/ihItNnMA0GCSqGSIb3DQEBAQUABIIBADZx2t/RwAOwCPdPXyHqPiC3ejBn
+# ugdswtd0r/odPtwPEYFzoHNdH704oc0KcQSZ+/xNJTb9TqJZs+2zThIOtDHwGWwd
+# D/2mCJ+u/oRLfwGXX+P4ienErqQ61G16SMC+Qaf6QSFILRFuFj1pl1b5rIYv2ai0
+# +QVUQ1PFsj28VaQusCQt+Ek+x4zzVGT7Sh1ZEAj/Ue3K1XPI63nl5gvuWv+rMkC+
+# e8SVPeKRS/em2Ddjk6e/4++lVejbpx/6Nd5VHEEM9Ok4WGWTgAgL0T2fDzL6hCnY
+# Jrrx62eSgZu2JY5vjxGKkk8ha3sMWUamVo1lV4nQAwtNYc9CQY3eEeOyxRE=
 # SIG # End signature block

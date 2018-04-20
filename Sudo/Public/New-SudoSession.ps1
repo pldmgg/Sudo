@@ -358,7 +358,7 @@ function New-SudoSession {
     # Cleanup 
     Remove-Item $SystemConfigScriptFilePath
     
-    if (!$StartSudo -or !$KeepOpen) {
+    if (!$($StartSudo -or $KeepOpen)) {
         Write-Warning "The New SudoSession named '$($ElevatedPSSession.Name)' with Id '$($ElevatedPSSession.Id)' will stay open for approximately 3 minutes!"
     }
 
@@ -387,8 +387,8 @@ function New-SudoSession {
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUmr8Y8PcsC9A9QSjVoRy1itSK
-# zDmgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUA9DFUetbLBEizRu5PYxy9qWL
+# YZegggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -445,11 +445,11 @@ function New-SudoSession {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFDoCgNbyBhmBfgTX
-# FXiZ1PAXEO6qMA0GCSqGSIb3DQEBAQUABIIBAJQurMkZertIdSTjO7GnBl/yIvGX
-# kRzLnfzsZVcDqYLqJj1qsHMbEMu5ytt8+B8fV3U+l6o5irUOsF9qTCoEgxfRrOv9
-# /D2nIDZqbeiT9LN47Q5KMo3s0z1K/d1lGc+W9LlT01QOWt29JzUGRj32Dw9wr3gY
-# v4EbMN4F+QPjIsF14+NKnmZokwTHs3UjN4R4b7m5h/24yTkdZKefieR8FnblVc3d
-# sF2eWeACwIu/nB8CAtYuRU/mclUnBVZNPdKqi6e1YmkEpCPiYBCYbNy+NhI3mB0D
-# 4sfkIQdOLUVoWXKbTbOTf6Au9SkBWlIwJ6oLixaeh3/7X7Zxvs9L8U0quSc=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFPxgLQMWvpvWbTKH
+# V9v75qL2rp+/MA0GCSqGSIb3DQEBAQUABIIBAAE0Wc2K6WEury8EOM68nOgclyfD
+# w7bquDa8jpzN1mIw6NtmJWFhdao0zQRok+gjGA1rnNdVT9JpZN6USDAmwRY7lNW/
+# 0JfZFuc+1fZ0SBkQsKOFor+8Tz6ltsGnLXgQNgZ+p2sGBik/wJhoITM+uDznjSvt
+# kX7J71erEjRmc81jiuu+MCY2kJt5/jp7hF3Y+8jEOn3viseShgiGhGvJqrjYtIs9
+# wlGIy/sWVOaWq1iG6Ee0VTc9K4HwFRX75Ps9k++SEZM4uro59O5PlPB81DQVwuAz
+# +vt3vxERfdgxPGFoNnwIzfpO2b0uJ3yQPRGIXlcMfef9oXtK6vCwCviR2M4=
 # SIG # End signature block
