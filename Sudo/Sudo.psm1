@@ -174,12 +174,12 @@ function New-SudoSession {
     ##### BEGIN Main Body #####
 
     $CurrentUser = $($(whoami) -split "\\")[-1]
-    $SudoSessionFolder = "$HOME\SudoSession_$CurrentUser_$(Get-Date -Format MMddyyy)"
+    $SudoSessionFolder = "$HOME\SudoSession_$CurrentUser`_$(Get-Date -Format MMddyyy)"
     if (!$(Test-Path $SudoSessionFolder)) {
         $SudoSessionFolder = $(New-Item -ItemType Directory -Path $SudoSessionFolder).FullName
     }
-    $SudoSessionChangesPSObject = "$SudoSessionFolder\SudoSession_Config_Changes_$CurrentUser_$(Get-Date -Format MMddyyy_hhmmss).xml"
-    $TranscriptPath = "$SudoSessionFolder\SudoSession_Transcript_$CurrentUser_$(Get-Date -Format MMddyyy_hhmmss).txt"
+    $SudoSessionChangesPSObject = "$SudoSessionFolder\SudoSession_Config_Changes_$CurrentUser`_$(Get-Date -Format MMddyyy_hhmmss).xml"
+    $TranscriptPath = "$SudoSessionFolder\SudoSession_Transcript_$CurrentUser`_$(Get-Date -Format MMddyyy_hhmmss).txt"
     $SystemConfigScriptFilePath = "$SudoSessionFolder\SystemConfigScript.ps1"
     $CredDelRegLocation = "HKLM:\Software\Policies\Microsoft\Windows\CredentialsDelegation"
     $CredSSPServicePath = "WSMan:\localhost\Service\Auth\CredSSP"
@@ -331,11 +331,24 @@ function New-SudoSession {
 
     $ElevatedPSSession = New-PSSession -Name "Sudo$UserName" -Authentication CredSSP -Credential $Credentials
 
+    try {
+        $RestoreOriginalSystemConfig = Restore-OriginalSystemConfig -OriginalConfigInfo $SystemConfigScriptResult -ExistingSudoSession $ElevatedPSSession
+        if (!$RestoreOriginalSystemConfig) {throw "Problem restoring original WSMAN and CredSSP system config! See '$SudoSessionChangesPSObject' for information about what was changed."}
+        
+        $SudoSessionRevertChangesPSObject = $($(Resolve-Path "$SudoSessionFolder\SudoSession_Config_Revert_Changes_*.xml").Path | foreach {
+            Get-Item $_
+        } | Sort-Object -Property CreationTime)[-1]
+    }
+    catch {
+        Write-Warning $_.Exception.Message
+    }
+
     New-Variable -Name "NewSessionAndOriginalStatus" -Scope Global -Value $(
         [pscustomobject]@{
             ElevatedPSSession               = $ElevatedPSSession
             WSManAndRegistryChanges         = $SystemConfigScriptResult
             ConfigChangesFilePath           = $SudoSessionChangesPSObject
+            RevertedChangesFilePath         = $SudoSessionRevertChangesPSObject
         }
     ) -Force
     
@@ -343,6 +356,8 @@ function New-SudoSession {
 
     # Cleanup 
     Remove-Item $SystemConfigScriptFilePath
+    
+    Write-Warning "The New SudoSession Named $($ElevatedPSSession.Name) with Id $($ElevatedPSSession.Id) will stay open for approximately 3 minutes!"
 
     ##### END Main Body #####
 
@@ -520,11 +535,11 @@ function Remove-SudoSession {
         }
 
         $CurrentUser = $($(whoami) -split "\\")[-1]
-        $SudoSessionFolder = "$HOME\SudoSession_$CurrentUser_$(Get-Date -Format MMddyyy)"
+        $SudoSessionFolder = "$HOME\SudoSession_$CurrentUser`_$(Get-Date -Format MMddyyy)"
         if (!$(Test-Path $SudoSessionFolder)) {
             $SudoSessionFolder = $(New-Item -ItemType Directory -Path $SudoSessionFolder).FullName
         }
-        $SudoSessionRevertChangesPSObject = "$SudoSessionFolder\SudoSession_Config_Revert_Changes__$CurrentUser_$(Get-Date -Format MMddyyy_hhmmss).xml"
+        $SudoSessionRevertChangesPSObject = "$SudoSessionFolder\SudoSession_Config_Revert_Changes_$CurrentUser`_$(Get-Date -Format MMddyyy_hhmmss).xml"
 
         $WSMandAndRegistryRevertChangesResult = Invoke-Command -Session $SessionToRemove -Scriptblock $SystemConfigSB
         $WSMandAndRegistryRevertChangesResult | Export-CliXml $SudoSessionRevertChangesPSObject
@@ -551,8 +566,14 @@ function Remove-SudoSession {
 function Restore-OriginalSystemConfig {
     [CmdletBinding(DefaultParameterSetName='Supply UserName and Password')]
     Param(
-        [Parameter(Mandatory=$True)]
+        [Parameter(Mandatory=$False)]
+        [System.Management.Automation.Runspaces.PSSession]$ExistingSudoSession,
+
+        [Parameter(Mandatory=$False)]
         [string]$SudoSessionChangesLogFilePath,
+
+        [Parameter(Mandatory=$False)]
+        $OriginalConfigInfo,
 
         [Parameter(
             Mandatory=$False,
@@ -575,22 +596,49 @@ function Restore-OriginalSystemConfig {
 
     ##### BEGIN Variable/Parameter Transforms and PreRun Prep #####
 
-    # First, ingest SudoSessionChangesLogFilePath
-    if (!$(Test-Path $SudoSessionChangesLogFilePath)) {
-        Write-Error "The path $SudoSessionChangesLogFilePath was not found! Halting!"
+    if ($(!$SudoSessionChangesLogFilePath -and !$OriginalConfigInfo) -or $($SudoSessionChangesLogFilePath -and $OriginalConfigInfo)) {
+        Write-Error "The $($MyInvocation.MyCommand.Name) function requires either the -SudoSessionChangesLogFilePath parameter or the -OriginalConfigInfoParameter! Halting!"
         $global:FunctionResult = "1"
         return
     }
-    else {
-        $OriginalConfigInfo = Import-CliXML $SudoSessionChangesLogFilePath
+
+    if ($SudoSessionChangesLogFilePath) {
+        # First, ingest SudoSessionChangesLogFilePath
+        if (!$(Test-Path $SudoSessionChangesLogFilePath)) {
+            Write-Error "The path $SudoSessionChangesLogFilePath was not found! Halting!"
+            $global:FunctionResult = "1"
+            return
+        }
+        else {
+            $OriginalConfigInfo = Import-CliXML $SudoSessionChangesLogFilePath
+        }
+    }
+
+    # Validate $OriginalConfigInfo
+    if ($OriginalConfigInfo) {
+        $ValidNoteProperties = @("RegistryKeyPropertiesCreated","RegistryKeysCreated","WinRMStateChange","WSMANServerCredSSPStateChange","WSMANClientCredSSPStateChange")
+        $ParamObjNoteProperties = $($OriginalConfigInfo | Get-Member -Type NoteProperty).Name
+        foreach ($Prop in $ParamObjNoteProperties) {
+            if ($ValidNoteProperties -notcontains $Prop) {
+                if ($PSBoundParameters['SudoSessionChangesLogFilePath']) {
+                    $ErrMsg = "The `$OriginalConfigInfo Object derived from the '$SudoSessionChangesLogFilePath' file is not valid! Halting!"
+                }
+                if ($PSBoundParameters['OriginalConfigInfo']) {
+                    $ErrMsg = "The `$OriginalConfigInfo Object passed to the -OriginalConfigInfo parameter is not valid! Halting!"
+                }
+                Write-Error $ErrMsg
+                $global:FunctionResult = "1"
+                return
+            }
+        }
     }
 
     $CurrentUser = $($(whoami) -split "\\")[-1]
-    $SudoSessionFolder = "$HOME\SudoSession_$CurrentUser_$(Get-Date -Format MMddyyy)"
+    $SudoSessionFolder = "$HOME\SudoSession_$CurrentUser`_$(Get-Date -Format MMddyyy)"
     if (!$(Test-Path $SudoSessionFolder)) {
         $SudoSessionFolder = $(New-Item -ItemType Directory -Path $SudoSessionFolder).FullName
     }
-    $SudoSessionRevertChangesPSObject = "$SudoSessionFolder\SudoSession_Config_Revert_Changes__$CurrentUser_$(Get-Date -Format MMddyyy_hhmmss).xml"
+    $SudoSessionRevertChangesPSObject = "$SudoSessionFolder\SudoSession_Config_Revert_Changes_$CurrentUser`_$(Get-Date -Format MMddyyy_hhmmss).xml"
 
     if (!$(GetElevation)) {
         if ($global:SudoCredentials) {
@@ -701,11 +749,91 @@ function Restore-OriginalSystemConfig {
         if ($Output.Count -gt 0) {
             $Output.Add("RevertConfigChangesFilePath",$SudoSessionRevertChangesPSObject)
 
-            [pscustomobject]$Output
-            [pscustomobject]$Output | Export-CliXml $SudoSessionRevertChangesPSObject
+            $FinalOutput = [pscustomobject]$Output
+            $FinalOutput | Export-CliXml $SudoSessionRevertChangesPSObject
         }
     }
-    else {
+    
+    if (!$(GetElevation) -and $ExistingSudoSession) {
+        if ($ExistingSudoSession.State -eq "Opened") {
+            $SystemConfigSB = {
+                $OriginalConfigInfo = $using:OriginalConfigInfo
+
+                # Collect $Output as we go...
+                $Output = [ordered]@{}
+
+                if ($OriginalConfigInfo.WSMANServerCredSSPStateChange) {
+                    Set-Item -Path "WSMan:\localhost\Service\Auth\CredSSP" -Value false
+                    $Output.Add("CredSSPServer","Off")
+                }
+                if ($OriginalConfigInfo.WSMANClientCredSSPStateChange) {
+                    Set-Item -Path "WSMan:\localhost\Client\Auth\CredSSP" -Value false
+                    $Output.Add("CredSSPClient","Off")
+                }
+                if ($OriginalConfigInfo.WinRMStateChange) {
+                    if ([bool]$(Test-WSMan -ErrorAction SilentlyContinue)) {
+                        try {
+                            Disable-PSRemoting -Force -ErrorAction Stop -WarningAction SilentlyContinue
+                            $Output.Add("PSRemoting","Disabled")
+                            Stop-Service winrm -ErrorAction Stop
+                            $Output.Add("WinRMService","Stopped")
+                            Set-Item "WSMan:\localhost\Service\AllowRemoteAccess" -Value false -ErrorAction Stop
+                            $Output.Add("WSMANServerAllowRemoteAccess",$False)
+                        }
+                        catch {
+                            Write-Error $_
+                            if ($Output.Count -gt 0) {[pscustomobject]$Output}
+                            $global:FunctionResult = "1"
+                            return
+                        }
+                    }
+                }
+        
+                if ($OriginalConfigInfo.RegistryKeyPropertiesCreated.Count -gt 0) {
+                    [System.Collections.ArrayList]$RegistryKeyPropertiesRemoved = @()
+
+                    foreach ($Property in $OriginalConfigInfo.RegistryKeyPropertiesCreated) {
+                        $PropertyName = $($Property | Get-Member -Type NoteProperty | Where-Object {$_.Name -notmatch "PSPath|PSParentPath|PSChildName|PSDrive|PSProvider"}).Name
+                        $PropertyPath = $Property.PSPath
+        
+                        if (Test-Path $PropertyPath) {
+                            Remove-ItemProperty -Path $PropertyPath -Name $PropertyName
+                            $null = $RegistryKeyPropertiesRemoved.Add($Property)
+                        }
+                    }
+
+                    $Output.Add("RegistryKeyPropertiesRemoved",$RegistryKeyPropertiesRemoved)
+                }
+        
+                if ($OriginalConfigInfo.RegistryKeysCreated.Count -gt 0) {
+                    [System.Collections.ArrayList]$RegistryKeysRemoved = @()
+
+                    foreach ($RegKey in $OriginalConfigInfo.RegistryKeysCreated) {
+                        $RegPath = $RegKey.PSPath
+        
+                        if (Test-Path $RegPath) {
+                            Remove-Item $RegPath -Recurse -Force
+                            $null = $RegistryKeysRemoved.Add($RegKey)
+                        }
+                    }
+
+                    $Output.Add("RegistryKeysRemoved",$RegistryKeysRemoved)
+                }
+
+                if ($Output.Count -gt 0) {
+                    [pscustomobject]$Output
+                }
+            }
+
+            $FinalOutput = Invoke-Command -Session $ExistingSudoSession -Scriptblock $SystemConfigSB
+            $FinalOutput | Export-CliXml $SudoSessionRevertChangesPSObject
+        }
+        else {
+            $useAltMethod = $True
+        }
+    }
+
+    if ($(!$(GetElevation) -and !$ExistingSudoSession) -or $UseAltMethod) {
         [System.Collections.ArrayList]$SystemConfigScript = @()
 
         $Line = '$Output = [ordered]@{}'
@@ -814,9 +942,10 @@ function Restore-OriginalSystemConfig {
         $Process.Start() | Out-Null
         $Process.WaitForExit()
         
-        $RevertChangesResult = Import-CliXML $SudoSessionRevertChangesPSObject
-        $RevertChangesResult
+        $FinalOutput = Import-CliXML $SudoSessionRevertChangesPSObject
     }
+
+    $FinalOutput
 
     ##### END Main Body #####
         
@@ -1037,8 +1166,8 @@ function Start-SudoSession {
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUV54Tw1OArauL0fG18wUKRXE1
-# oLugggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUoCWsFP6kD30+8RzDRScRqNcS
+# jrygggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -1095,11 +1224,11 @@ function Start-SudoSession {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFMc3v8YKqrnnjJt9
-# bbApoVrNAjxaMA0GCSqGSIb3DQEBAQUABIIBABKFaVjMfRWJfWogslZaJlPU6FEU
-# 8/BpmUDMnolaxgcKThNnTnwV1ifAHLSewfVLSj5LxPHZIgiXieZIx6PdlsShR6bp
-# uEpf4xdxjph6Hx02DlBvZJzgGCrtPSK2wo+hN6jLPXq32lMU5t8lF2qLtwQH2pFj
-# SGMZUGbsZw6CtNEcKHM3xoZKXTEHzE9iu8GAio7YyjhVYtEhZBAHw6T3+pLNdsmY
-# prHwXa0SIpKQHx6wq5sh4Op0/HXL5MkLFWNKh3S6EbaluD5drtcWdy6gQn+L2QIX
-# 6RnjFcA/3ZC6Ng7mGFlQedAnNNxNzTYQQIvcClBWrwEF9QHgbWygnn9z4pE=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFBwU3hMv8UJbtAo2
+# o7fuQ9IE61PQMA0GCSqGSIb3DQEBAQUABIIBACFwb3wtpTCaNNBJRWuZOdKIhP/S
+# JhWKL9U+X+FcXuYna+nNMu65h7Gr0pOBAxewMi5M7UdB2EGhlbCXtGnWOkFMuNkK
+# rFIz52YnmOyTVzOpVzjv9jNAHI14CJq8HPfG4PcCFWt+oT5uBK3TtPZvGa/XPt9a
+# Ul5YJjzuEQYo4xTfKxKKc+C1S3lMEp+04sBqGZwfZ6CXGOO+5bgd9YPK5emFE9HV
+# bHG0RolmC/s8L/TdbD7o4IAzVcBGQhPqaVTVuk860H381wbOmJmiwB4DRZ+YF380
+# qgT+YyGhQjQax0bmf32DHcMrgjDV7anU8gugc+z2kItchND7//8owxIsjaM=
 # SIG # End signature block

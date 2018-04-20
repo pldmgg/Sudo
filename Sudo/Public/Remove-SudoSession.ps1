@@ -169,11 +169,11 @@ function Remove-SudoSession {
         }
 
         $CurrentUser = $($(whoami) -split "\\")[-1]
-        $SudoSessionFolder = "$HOME\SudoSession_$CurrentUser_$(Get-Date -Format MMddyyy)"
+        $SudoSessionFolder = "$HOME\SudoSession_$CurrentUser`_$(Get-Date -Format MMddyyy)"
         if (!$(Test-Path $SudoSessionFolder)) {
             $SudoSessionFolder = $(New-Item -ItemType Directory -Path $SudoSessionFolder).FullName
         }
-        $SudoSessionRevertChangesPSObject = "$SudoSessionFolder\SudoSession_Config_Revert_Changes__$CurrentUser_$(Get-Date -Format MMddyyy_hhmmss).xml"
+        $SudoSessionRevertChangesPSObject = "$SudoSessionFolder\SudoSession_Config_Revert_Changes_$CurrentUser`_$(Get-Date -Format MMddyyy_hhmmss).xml"
 
         $WSMandAndRegistryRevertChangesResult = Invoke-Command -Session $SessionToRemove -Scriptblock $SystemConfigSB
         $WSMandAndRegistryRevertChangesResult | Export-CliXml $SudoSessionRevertChangesPSObject
@@ -214,8 +214,8 @@ function Remove-SudoSession {
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUGC6iUkim/j8VHdnSa3SKLuHb
-# NiWgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUXK4siH6jJ8Im2QViFb+t3bUj
+# sYWgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -272,11 +272,11 @@ function Remove-SudoSession {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFFmjSQkDNMSlTP3d
-# N024rjFZ4NUkMA0GCSqGSIb3DQEBAQUABIIBAGhSe2VwO20lEjb/QLzvEvfDQJ9m
-# SGC/cl+z3haxH04J8vWbfR+CRJxlByNaxM1AlRwzszeIw4mwCr5cyxXJShF+PISW
-# lmwMSRwIVvhN9Oh2OelUd7pX3Zs3G7B1pdLI5ldvc8+KcasOiUQNmDzLReGWMrRw
-# LD6NyQLcB8FAkirXR17ygLJmzbOvayPnWq8psSU2HqYGoZnrk0L7+/rgXDdnN4rp
-# PQH/agypgPM69OYuQTKCe79ze6I/pK97rnYQxuX+ef9cW2WeY1BmUsTHXOjb6FMy
-# dG3mxlIUP5Cobud6NiQc16M+boHqCEUJmdDVovGFOq5vvCpN8Hcmeqg/k2Q=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFI5jJgoqeblb9pQt
+# SYloTd6kKWTFMA0GCSqGSIb3DQEBAQUABIIBAAGhhWlJ3RDzC0GKtVpawQSMf3af
+# C9Gusau6k6xReS63y3B8noEKB8E6mZo4t7Fp5fmV9b3aMYTtzvgPJpN6HOxISO31
+# RKfcRrcoxLJwVA5HohA9Iy6on7BQ6Fc1v8D2UtrxodQxKkFW1p3WIdltQzk09+cq
+# 7G6Y2hZcrHZ+9lB22TxWvdeu+7RhGS9Yh2QC2XTe+olQFKbvgrg7mvR5v6+Y8pFV
+# EbMZ8pTRmzmzdx32wV9YZbjk2sE7NYENvo4WuUzgmokekwjLbp7UHrmO2G2lwR7S
+# W6EyOf2hCiiRA5AGg5Hwb6MWNbwNqPEDYyVpztrmTM2JdzDlRbw8bb9uaGQ=
 # SIG # End signature block

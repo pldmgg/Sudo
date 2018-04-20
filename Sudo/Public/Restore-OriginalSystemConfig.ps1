@@ -5,8 +5,14 @@
 function Restore-OriginalSystemConfig {
     [CmdletBinding(DefaultParameterSetName='Supply UserName and Password')]
     Param(
-        [Parameter(Mandatory=$True)]
+        [Parameter(Mandatory=$False)]
+        [System.Management.Automation.Runspaces.PSSession]$ExistingSudoSession,
+
+        [Parameter(Mandatory=$False)]
         [string]$SudoSessionChangesLogFilePath,
+
+        [Parameter(Mandatory=$False)]
+        $OriginalConfigInfo,
 
         [Parameter(
             Mandatory=$False,
@@ -29,22 +35,49 @@ function Restore-OriginalSystemConfig {
 
     ##### BEGIN Variable/Parameter Transforms and PreRun Prep #####
 
-    # First, ingest SudoSessionChangesLogFilePath
-    if (!$(Test-Path $SudoSessionChangesLogFilePath)) {
-        Write-Error "The path $SudoSessionChangesLogFilePath was not found! Halting!"
+    if ($(!$SudoSessionChangesLogFilePath -and !$OriginalConfigInfo) -or $($SudoSessionChangesLogFilePath -and $OriginalConfigInfo)) {
+        Write-Error "The $($MyInvocation.MyCommand.Name) function requires either the -SudoSessionChangesLogFilePath parameter or the -OriginalConfigInfoParameter! Halting!"
         $global:FunctionResult = "1"
         return
     }
-    else {
-        $OriginalConfigInfo = Import-CliXML $SudoSessionChangesLogFilePath
+
+    if ($SudoSessionChangesLogFilePath) {
+        # First, ingest SudoSessionChangesLogFilePath
+        if (!$(Test-Path $SudoSessionChangesLogFilePath)) {
+            Write-Error "The path $SudoSessionChangesLogFilePath was not found! Halting!"
+            $global:FunctionResult = "1"
+            return
+        }
+        else {
+            $OriginalConfigInfo = Import-CliXML $SudoSessionChangesLogFilePath
+        }
+    }
+
+    # Validate $OriginalConfigInfo
+    if ($OriginalConfigInfo) {
+        $ValidNoteProperties = @("RegistryKeyPropertiesCreated","RegistryKeysCreated","WinRMStateChange","WSMANServerCredSSPStateChange","WSMANClientCredSSPStateChange")
+        $ParamObjNoteProperties = $($OriginalConfigInfo | Get-Member -Type NoteProperty).Name
+        foreach ($Prop in $ParamObjNoteProperties) {
+            if ($ValidNoteProperties -notcontains $Prop) {
+                if ($PSBoundParameters['SudoSessionChangesLogFilePath']) {
+                    $ErrMsg = "The `$OriginalConfigInfo Object derived from the '$SudoSessionChangesLogFilePath' file is not valid! Halting!"
+                }
+                if ($PSBoundParameters['OriginalConfigInfo']) {
+                    $ErrMsg = "The `$OriginalConfigInfo Object passed to the -OriginalConfigInfo parameter is not valid! Halting!"
+                }
+                Write-Error $ErrMsg
+                $global:FunctionResult = "1"
+                return
+            }
+        }
     }
 
     $CurrentUser = $($(whoami) -split "\\")[-1]
-    $SudoSessionFolder = "$HOME\SudoSession_$CurrentUser_$(Get-Date -Format MMddyyy)"
+    $SudoSessionFolder = "$HOME\SudoSession_$CurrentUser`_$(Get-Date -Format MMddyyy)"
     if (!$(Test-Path $SudoSessionFolder)) {
         $SudoSessionFolder = $(New-Item -ItemType Directory -Path $SudoSessionFolder).FullName
     }
-    $SudoSessionRevertChangesPSObject = "$SudoSessionFolder\SudoSession_Config_Revert_Changes__$CurrentUser_$(Get-Date -Format MMddyyy_hhmmss).xml"
+    $SudoSessionRevertChangesPSObject = "$SudoSessionFolder\SudoSession_Config_Revert_Changes_$CurrentUser`_$(Get-Date -Format MMddyyy_hhmmss).xml"
 
     if (!$(GetElevation)) {
         if ($global:SudoCredentials) {
@@ -155,11 +188,91 @@ function Restore-OriginalSystemConfig {
         if ($Output.Count -gt 0) {
             $Output.Add("RevertConfigChangesFilePath",$SudoSessionRevertChangesPSObject)
 
-            [pscustomobject]$Output
-            [pscustomobject]$Output | Export-CliXml $SudoSessionRevertChangesPSObject
+            $FinalOutput = [pscustomobject]$Output
+            $FinalOutput | Export-CliXml $SudoSessionRevertChangesPSObject
         }
     }
-    else {
+    
+    if (!$(GetElevation) -and $ExistingSudoSession) {
+        if ($ExistingSudoSession.State -eq "Opened") {
+            $SystemConfigSB = {
+                $OriginalConfigInfo = $using:OriginalConfigInfo
+
+                # Collect $Output as we go...
+                $Output = [ordered]@{}
+
+                if ($OriginalConfigInfo.WSMANServerCredSSPStateChange) {
+                    Set-Item -Path "WSMan:\localhost\Service\Auth\CredSSP" -Value false
+                    $Output.Add("CredSSPServer","Off")
+                }
+                if ($OriginalConfigInfo.WSMANClientCredSSPStateChange) {
+                    Set-Item -Path "WSMan:\localhost\Client\Auth\CredSSP" -Value false
+                    $Output.Add("CredSSPClient","Off")
+                }
+                if ($OriginalConfigInfo.WinRMStateChange) {
+                    if ([bool]$(Test-WSMan -ErrorAction SilentlyContinue)) {
+                        try {
+                            Disable-PSRemoting -Force -ErrorAction Stop -WarningAction SilentlyContinue
+                            $Output.Add("PSRemoting","Disabled")
+                            Stop-Service winrm -ErrorAction Stop
+                            $Output.Add("WinRMService","Stopped")
+                            Set-Item "WSMan:\localhost\Service\AllowRemoteAccess" -Value false -ErrorAction Stop
+                            $Output.Add("WSMANServerAllowRemoteAccess",$False)
+                        }
+                        catch {
+                            Write-Error $_
+                            if ($Output.Count -gt 0) {[pscustomobject]$Output}
+                            $global:FunctionResult = "1"
+                            return
+                        }
+                    }
+                }
+        
+                if ($OriginalConfigInfo.RegistryKeyPropertiesCreated.Count -gt 0) {
+                    [System.Collections.ArrayList]$RegistryKeyPropertiesRemoved = @()
+
+                    foreach ($Property in $OriginalConfigInfo.RegistryKeyPropertiesCreated) {
+                        $PropertyName = $($Property | Get-Member -Type NoteProperty | Where-Object {$_.Name -notmatch "PSPath|PSParentPath|PSChildName|PSDrive|PSProvider"}).Name
+                        $PropertyPath = $Property.PSPath
+        
+                        if (Test-Path $PropertyPath) {
+                            Remove-ItemProperty -Path $PropertyPath -Name $PropertyName
+                            $null = $RegistryKeyPropertiesRemoved.Add($Property)
+                        }
+                    }
+
+                    $Output.Add("RegistryKeyPropertiesRemoved",$RegistryKeyPropertiesRemoved)
+                }
+        
+                if ($OriginalConfigInfo.RegistryKeysCreated.Count -gt 0) {
+                    [System.Collections.ArrayList]$RegistryKeysRemoved = @()
+
+                    foreach ($RegKey in $OriginalConfigInfo.RegistryKeysCreated) {
+                        $RegPath = $RegKey.PSPath
+        
+                        if (Test-Path $RegPath) {
+                            Remove-Item $RegPath -Recurse -Force
+                            $null = $RegistryKeysRemoved.Add($RegKey)
+                        }
+                    }
+
+                    $Output.Add("RegistryKeysRemoved",$RegistryKeysRemoved)
+                }
+
+                if ($Output.Count -gt 0) {
+                    [pscustomobject]$Output
+                }
+            }
+
+            $FinalOutput = Invoke-Command -Session $ExistingSudoSession -Scriptblock $SystemConfigSB
+            $FinalOutput | Export-CliXml $SudoSessionRevertChangesPSObject
+        }
+        else {
+            $useAltMethod = $True
+        }
+    }
+
+    if ($(!$(GetElevation) -and !$ExistingSudoSession) -or $UseAltMethod) {
         [System.Collections.ArrayList]$SystemConfigScript = @()
 
         $Line = '$Output = [ordered]@{}'
@@ -268,9 +381,10 @@ function Restore-OriginalSystemConfig {
         $Process.Start() | Out-Null
         $Process.WaitForExit()
         
-        $RevertChangesResult = Import-CliXML $SudoSessionRevertChangesPSObject
-        $RevertChangesResult
+        $FinalOutput = Import-CliXML $SudoSessionRevertChangesPSObject
     }
+
+    $FinalOutput
 
     ##### END Main Body #####
         
@@ -302,8 +416,8 @@ function Restore-OriginalSystemConfig {
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUH5mufyKxdSBgSwaHD88U/fey
-# diSgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUGvJ2bfwkuJMUv/WnZo4U7vW0
+# 04igggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -360,11 +474,11 @@ function Restore-OriginalSystemConfig {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFMVUi3x/aKSZeqpb
-# ChW38Vmu9Ma2MA0GCSqGSIb3DQEBAQUABIIBAMGY7hII3bAGXSqNvcYoyzH9zSgN
-# 8nmV5kq4dMccIHTnQAopKhsjQHSavu+DJ0VwCPOchYfdIsfxG30TOdwF193c7iT1
-# 0SF4ykVfPA2ThN+83nMZt/2G1nzUwKkELTIHmTp9ZM8UN/uj/0AT3sBUAz094Q0x
-# j3cMLe8fONsfBc4ynz7WW2lmdBqQAt1Q808Bcauwy20xgrXu6fzlBd9tBorWSuU7
-# P3Ayg2fVquEXXnuLg1iGPiLGrISWnTwane/Y0exRt7uxIO3owRr6NmIYTp0z0xeW
-# BGHItaN7LQDaCuGakMU03LjsdYDQ/ds/VrlsWV9O2PYd4G/ttHVhW7TBCQE=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFGEIKFWKyqLipkht
+# lwpUgRTlX/OnMA0GCSqGSIb3DQEBAQUABIIBALTS9uvD2NhHBu7jFZzpA649FpMR
+# OcfFHft7Bkll+u4apf9QjB++agXigTGysuyMFCrs3nAY+Z9eMr9lS8qRC/ab/VcO
+# 4/8Ugctm0EwM9FgkgHcqtw0Q33e2SvmLRjxzdZkOYy2ewhMtO0n9ykAOL5BvhoBN
+# CyKoc9+BUUFf1FjRQ3/oZE5JZMt3Mrh2KK1kNGQFJP46BWSubaCF+gT94JlynsDK
+# ud0CMzdteenrKY/yJgw8w3M8u7mcDc3kyurrxMdW2Wba/u/KRyB5L6Bj8tntlVGF
+# J5movRUIO9pHLd2yRe/JDq0u3UlCw+njqtjF4NTVi5uZRm4hALvSERksQrw=
 # SIG # End signature block

@@ -69,18 +69,9 @@ PS C:\Users\zeroadmin> Remove-SudoSession -OriginalConfigInfo $MyElevatedSesion.
 
 ```
 
-### Scenario 4: Create a New PSSession via New-SudoSession. Your current PowerShell Session is closed before you have a chance to run Remove-SudoSession.
+### Scenario 4: The PowerShell Process Running the New-SudoSession function is unexpectedly killed before the function completes.
 
-```powershell
-PS C:\Users\zeroadmin> $MyElevatedSession = New-SudoSession -Credentials $ZeroAdminCreds
-```
-
-At this point, if the above PowerShell Session is closed, there might still be outstanding changes to the localhost's Registry and WSMAN config. 
-
-(IMPORTANT NOTE: This scenario only pertains to the `New-SudoSession` function and it's sister function `Remove-SudoSession`. The `Start-SudoSession` (alias '`sudo`') function does NOT have this problem because system config changes are made and reverted all in one
-fell swoop.)
-
-Revert your system config to what it was prior to using the `New-SudoSession` function by opening a new PowerShell Session (does not matter if it is elevated or not) and:
+Revert your WSMAN and CredSSP settings to what they was prior to using the `New-SudoSession` function by opening a new PowerShell Session (does not matter if it is elevated or not) and:
 
 ```powershell
 PS C:\Users\zeroadmin> Import-Module Sudo

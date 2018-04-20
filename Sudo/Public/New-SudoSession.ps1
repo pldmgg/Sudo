@@ -157,12 +157,12 @@ function New-SudoSession {
     ##### BEGIN Main Body #####
 
     $CurrentUser = $($(whoami) -split "\\")[-1]
-    $SudoSessionFolder = "$HOME\SudoSession_$CurrentUser_$(Get-Date -Format MMddyyy)"
+    $SudoSessionFolder = "$HOME\SudoSession_$CurrentUser`_$(Get-Date -Format MMddyyy)"
     if (!$(Test-Path $SudoSessionFolder)) {
         $SudoSessionFolder = $(New-Item -ItemType Directory -Path $SudoSessionFolder).FullName
     }
-    $SudoSessionChangesPSObject = "$SudoSessionFolder\SudoSession_Config_Changes_$CurrentUser_$(Get-Date -Format MMddyyy_hhmmss).xml"
-    $TranscriptPath = "$SudoSessionFolder\SudoSession_Transcript_$CurrentUser_$(Get-Date -Format MMddyyy_hhmmss).txt"
+    $SudoSessionChangesPSObject = "$SudoSessionFolder\SudoSession_Config_Changes_$CurrentUser`_$(Get-Date -Format MMddyyy_hhmmss).xml"
+    $TranscriptPath = "$SudoSessionFolder\SudoSession_Transcript_$CurrentUser`_$(Get-Date -Format MMddyyy_hhmmss).txt"
     $SystemConfigScriptFilePath = "$SudoSessionFolder\SystemConfigScript.ps1"
     $CredDelRegLocation = "HKLM:\Software\Policies\Microsoft\Windows\CredentialsDelegation"
     $CredSSPServicePath = "WSMan:\localhost\Service\Auth\CredSSP"
@@ -314,11 +314,24 @@ function New-SudoSession {
 
     $ElevatedPSSession = New-PSSession -Name "Sudo$UserName" -Authentication CredSSP -Credential $Credentials
 
+    try {
+        $RestoreOriginalSystemConfig = Restore-OriginalSystemConfig -OriginalConfigInfo $SystemConfigScriptResult -ExistingSudoSession $ElevatedPSSession
+        if (!$RestoreOriginalSystemConfig) {throw "Problem restoring original WSMAN and CredSSP system config! See '$SudoSessionChangesPSObject' for information about what was changed."}
+        
+        $SudoSessionRevertChangesPSObject = $($(Resolve-Path "$SudoSessionFolder\SudoSession_Config_Revert_Changes_*.xml").Path | foreach {
+            Get-Item $_
+        } | Sort-Object -Property CreationTime)[-1]
+    }
+    catch {
+        Write-Warning $_.Exception.Message
+    }
+
     New-Variable -Name "NewSessionAndOriginalStatus" -Scope Global -Value $(
         [pscustomobject]@{
             ElevatedPSSession               = $ElevatedPSSession
             WSManAndRegistryChanges         = $SystemConfigScriptResult
             ConfigChangesFilePath           = $SudoSessionChangesPSObject
+            RevertedChangesFilePath         = $SudoSessionRevertChangesPSObject
         }
     ) -Force
     
@@ -326,6 +339,8 @@ function New-SudoSession {
 
     # Cleanup 
     Remove-Item $SystemConfigScriptFilePath
+    
+    Write-Warning "The New SudoSession Named $($ElevatedPSSession.Name) with Id $($ElevatedPSSession.Id) will stay open for approximately 3 minutes!"
 
     ##### END Main Body #####
 
@@ -352,8 +367,8 @@ function New-SudoSession {
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUzDY/3GJFgJCzmEWXF6Jc882j
-# zDagggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQU2xFTDJA6aDcJJSURrsLoLEJ1
+# XKGgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -410,11 +425,11 @@ function New-SudoSession {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFL3Vcczq2+fYTwHn
-# ao6seBnpkiAIMA0GCSqGSIb3DQEBAQUABIIBAF2eN90FOJZqn25YsBZ3vqK9C8sR
-# s4fepMFd6DIE7isa5/2ll+uIkuRM+aXbMrVcoyaSXz40/gtapYNL8VvRKO2FBGDz
-# BTZlAmrYOgnaocTS1jg1cWYXuT9Krkivxqf0R5VxkCba2x7TYwrIk82n6Z9FmctK
-# Sq+zH/fa7kLBljM+pccJ8ciw+K4OG5c4V7CqUNxFfA64S44ZEkZvTnJGSURM4U2m
-# BeZ0D54TWHLgnbnf0Ia90F5P2d2RBlJivndyQ/FcExkU8JdSXrg0YfN4ivoYrHEA
-# w1b8N7Bk1vJKWEXuXdnG7wBS5UMdRqI6HMTDeEIK8SyXP0v6iGGl2ADCQqg=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFO4ihrZZMkAvWAIc
+# J7t7OmwPW6+SMA0GCSqGSIb3DQEBAQUABIIBACBEkENWyqw/m8D2/i2eqVaDvo0z
+# xwK2fXHVM0Ly2SGZFA9VHN7StlhO+zLnrFk6k6sdGIFg8DAy1UzwSRaIKJABBnoM
+# VexmBUUniU3GYRxr+ZMW5u2+CePBAcPl2W0UFf/Z6B/nJJ3NDeh+zjXMurVj+b2i
+# NIPmun9Ub8NMjcajZnmeNpFqJ/LDR6EmLW/IflKKPF2NolIS8N/fQQEhgn5XNCIX
+# 6Y00fy7fmMqL+glHYQeayHYG4BZ7Sa1JwAuQl9dlyUol7ARSJcesHP4Er7EbPH7y
+# iYmQdf/psh/cR/SJiW6SxsHGRp3b/EqjmGk2FUqyhpeFDf7bWhYikZA/ox8=
 # SIG # End signature block
