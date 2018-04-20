@@ -80,7 +80,10 @@ function Start-SudoSession {
             Mandatory=$False,
             ParameterSetName='Supply Credentials'
         )]
-        [pscredential]$Credentials
+        [pscredential]$Credentials,
+
+        [Parameter(Mandatory=$False)]
+        [System.Management.Automation.Runspaces.PSSession]$ExistingSudoSession = $global:NewSessionAndOriginalStatus.ElevatedPSSession
     )
 
     ##### BEGIN Variable/Parameter Transforms and PreRun Prep #####
@@ -171,8 +174,22 @@ function Start-SudoSession {
 
     ##### BEGIN Main Body #####
 
-    $SudoSessionInfo = New-SudoSession -Credentials $Credentials -StartSudo
-    $ElevatedPSSession = $SudoSessionInfo.ElevatedPSSession
+    if ($ExistingSudoSession.State -eq "Opened") {
+        $ElevatedPSSession = $ExistingSudoSession
+    }
+    else {
+        try {
+            $SudoSessionInfo = New-SudoSession -Credentials $Credentials -StartSudo -ErrorAction Stop
+            if (!$SudoSessionInfo) {throw "There was a problem with the New-SudoSession function! Halting!"}
+        }
+        catch {
+            Write-Error $_
+            $global:FunctionResult = "1"
+            return
+        }
+        
+        $ElevatedPSSession = $SudoSessionInfo.ElevatedPSSession
+    }
 
     if ($StringExpression) {
         if ($InitialRegexMatches.Count -gt 0) {
@@ -201,8 +218,10 @@ function Start-SudoSession {
     }
 
 
-    # Remove the SudoSession
-    $null = Remove-SudoSession -SessionToRemove $ElevatedPSSession
+    if (!$ExistingSudoSession) {
+        # Remove the SudoSession
+        $null = Remove-SudoSession -SessionToRemove $ElevatedPSSession
+    }
 
     ##### END Main Body #####
 }
@@ -230,8 +249,8 @@ function Start-SudoSession {
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUSt54Wj83SeyD4CNMCpUkVa/A
-# kxygggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUDpsWCPOamTBjBZP+m1uIqU7T
+# pHSgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -288,11 +307,11 @@ function Start-SudoSession {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFGgtIuW2xEtwdCl+
-# RLBeYDiS63+iMA0GCSqGSIb3DQEBAQUABIIBAIEPyt5DtlciXO4KsG2s8PSl7gS8
-# OiOM25L0uSfnnaWW/mJ+0Ws6GtPjvLUX6LjWp8RPToIF6PSFvdxTqVK+wYX7v9ZS
-# YW8/BnT7GWveagVzshqMfL4lGuQzDB8+p7kXSZWoa5JDbQ/+YJM6dwElZ3frYyFi
-# ZcwtJaUQXdkkFcRa+fPzI4BbKna8HmDOmcP/Ro+lISrHhFQfLoco+dVdCdaEQBi9
-# HWhT7t005/Spr5UPi+qFJ34gQTJDhGDHfichGRsf4g8BTrQauea59qm8BuVAPpUA
-# QIjhBsdDkXWCrtxJ3SDeEbuCHoc/074wu6tmmwYqwScg+yb8GXIdTOW8rJw=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFCbTXbFuHU004S95
+# v7LmaVwtigI8MA0GCSqGSIb3DQEBAQUABIIBAEszgfkaVDeUff1ChZ2PdF7bJlzr
+# wYKkMaWHQ7gLPzbPSPtjLG3PTzmFOTRufb/qlvJjYn+lvcJkTSkSqY0pkje+mIlJ
+# +PUeSHUgtMmwI1IN8qq4l9zD8hlaK3uVq01E6fOQzT9mKr9x+1iwplj0lA1bgmLA
+# YxhARYD3sFVngqFGf6kReUhUiOR942IOfG5fGrRx4QBs3jDz7ZmcCgjJ0JN2mI5L
+# qzBl8GYz6sgeT0q4aE+HBOG9fqNPZnIHtwbDOM4w5rt78+tqtQ/jfqM354Z57f5x
+# OFg9ROwa21JPEf1sPLP1VndR+sBfuBHNrot1wTl6Rs8fjteXboyrviTsft4=
 # SIG # End signature block

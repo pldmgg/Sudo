@@ -337,7 +337,14 @@ function New-SudoSession {
     $ProcessInfo.Verb = "RunAs"
     $Process = New-Object System.Diagnostics.Process
     $Process.StartInfo = $ProcessInfo
-    $Process.Start() | Out-Null
+    try {
+        $Process.Start() | Out-Null
+    }
+    catch {
+        Write-Error "User did not accept the UAC Prompt! Halting!"
+        $global:FunctionResult = "1"
+        return
+    }
     $Process.WaitForExit()
     $SystemConfigScriptResult = Import-CliXML $SudoSessionChangesPSObject
 
@@ -1059,7 +1066,10 @@ function Start-SudoSession {
             Mandatory=$False,
             ParameterSetName='Supply Credentials'
         )]
-        [pscredential]$Credentials
+        [pscredential]$Credentials,
+
+        [Parameter(Mandatory=$False)]
+        [System.Management.Automation.Runspaces.PSSession]$ExistingSudoSession = $global:NewSessionAndOriginalStatus.ElevatedPSSession
     )
 
     ##### BEGIN Variable/Parameter Transforms and PreRun Prep #####
@@ -1150,8 +1160,22 @@ function Start-SudoSession {
 
     ##### BEGIN Main Body #####
 
-    $SudoSessionInfo = New-SudoSession -Credentials $Credentials -StartSudo
-    $ElevatedPSSession = $SudoSessionInfo.ElevatedPSSession
+    if ($ExistingSudoSession.State -eq "Opened") {
+        $ElevatedPSSession = $ExistingSudoSession
+    }
+    else {
+        try {
+            $SudoSessionInfo = New-SudoSession -Credentials $Credentials -StartSudo -ErrorAction Stop
+            if (!$SudoSessionInfo) {throw "There was a problem with the New-SudoSession function! Halting!"}
+        }
+        catch {
+            Write-Error $_
+            $global:FunctionResult = "1"
+            return
+        }
+        
+        $ElevatedPSSession = $SudoSessionInfo.ElevatedPSSession
+    }
 
     if ($StringExpression) {
         if ($InitialRegexMatches.Count -gt 0) {
@@ -1180,8 +1204,10 @@ function Start-SudoSession {
     }
 
 
-    # Remove the SudoSession
-    $null = Remove-SudoSession -SessionToRemove $ElevatedPSSession
+    if (!$ExistingSudoSession) {
+        # Remove the SudoSession
+        $null = Remove-SudoSession -SessionToRemove $ElevatedPSSession
+    }
 
     ##### END Main Body #####
 }
@@ -1191,8 +1217,8 @@ function Start-SudoSession {
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUCwuICje6NOvKX0vDGQtzVzeW
-# z56gggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUlJARS9cw1f/ymppVplhlP+/l
+# 7ZKgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -1249,11 +1275,11 @@ function Start-SudoSession {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFAGVTKEfXXCh5YX6
-# xhw9CX9ycrlQMA0GCSqGSIb3DQEBAQUABIIBAA+w5vFQUt0nbcNVXcIeH+YjbgH5
-# VcPTSIhZTk9kLj5wnj/gzEy5DmxzvClhWzGyq/J6bl85+mLWBDeB67OxCsoaAfoI
-# pnxABEQ7jSQNWqzn3OZDm0ekuvt59DtYaHlqnB6CzAkCRQDQBeXZyzFEGs215Q9T
-# YztmFtvVkJBv4OLX0pgGrsZh01O2DYnH6PWDmjWdwIts5baNAQ7/+QU8AwyttD0V
-# WdT32ZLeQ0f932xl++egJ9lDH1reiQorYJaF1te2NPPppmSqirRiZ6uxQVFVrlF/
-# ujIkQB781Var1wYQ86Fg4G5xD7JdctNXNQW2DucfTtntjAzbU1bg8BJz8qc=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFKJIaSDwL4AtAsVc
+# JElvUJFnbsjcMA0GCSqGSIb3DQEBAQUABIIBAFOIODOXTFZqW8ZHOxSoD9arRkSC
+# jwV0f1cseIG6L9I9lq6m8jDoL1Cuviqq+5soqc9ntdDKCHo8lXBW/Qg2zugXSxTJ
+# eZpKnl5krhqgNbe9IIEX6aeRVUFXu6dGMRJnGQ3b8GEJTMDSTgjxkML6Dn7s2qlQ
+# orHFMrLUyYgg4aEPWiS+O0iaWwcHT+nMv0S8Wk5TYcLb9T1dutwyp46csHv4w1Vo
+# bAW/hdlEQP7JkKs7aG0fqKNAdMY0pH6s+Obea/SteTv9RQoge7mCAzJINDvI+IqE
+# nZ+Rd1SRKX5wRG8Qxl1/VZCWuxR6ttKgz/KHFL90l2j+2FlRH/z+c+8nr70=
 # SIG # End signature block

@@ -320,7 +320,14 @@ function New-SudoSession {
     $ProcessInfo.Verb = "RunAs"
     $Process = New-Object System.Diagnostics.Process
     $Process.StartInfo = $ProcessInfo
-    $Process.Start() | Out-Null
+    try {
+        $Process.Start() | Out-Null
+    }
+    catch {
+        Write-Error "User did not accept the UAC Prompt! Halting!"
+        $global:FunctionResult = "1"
+        return
+    }
     $Process.WaitForExit()
     $SystemConfigScriptResult = Import-CliXML $SudoSessionChangesPSObject
 
@@ -387,8 +394,8 @@ function New-SudoSession {
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUA9DFUetbLBEizRu5PYxy9qWL
-# YZegggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUVk4GajHYKbUY54qY5Nn8PgFY
+# SEqgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -445,11 +452,11 @@ function New-SudoSession {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFPxgLQMWvpvWbTKH
-# V9v75qL2rp+/MA0GCSqGSIb3DQEBAQUABIIBAAE0Wc2K6WEury8EOM68nOgclyfD
-# w7bquDa8jpzN1mIw6NtmJWFhdao0zQRok+gjGA1rnNdVT9JpZN6USDAmwRY7lNW/
-# 0JfZFuc+1fZ0SBkQsKOFor+8Tz6ltsGnLXgQNgZ+p2sGBik/wJhoITM+uDznjSvt
-# kX7J71erEjRmc81jiuu+MCY2kJt5/jp7hF3Y+8jEOn3viseShgiGhGvJqrjYtIs9
-# wlGIy/sWVOaWq1iG6Ee0VTc9K4HwFRX75Ps9k++SEZM4uro59O5PlPB81DQVwuAz
-# +vt3vxERfdgxPGFoNnwIzfpO2b0uJ3yQPRGIXlcMfef9oXtK6vCwCviR2M4=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFJoW9mSxFH9B/icx
+# 5S+59Q6iVAUzMA0GCSqGSIb3DQEBAQUABIIBAIndFBOPzc210UlK2NTkix5i4LRV
+# d5L/eAjcMF4HFipnLUjQWfkT6RhmfCXQrKw3+OBNU0T0UXVbsVxeXxub/cVcgMNH
+# HyUtomwV9X3HWBX8CQ0EgPAntRM/BGMwi5P/F9HM5grWATIEpXahmRk8VBeom/OT
+# 30edvPe9lBJesaYsFXx1LJCpyT3T/denc++WfFCrDNMp68iFLhWQswXs1deIFKje
+# b3wgfIGp08NoNrv8Avf7mpoSQ1M8z9SovTfiQBi0hV2FAad5VZD4UUDQACQYRHQt
+# ooSfxshLhqO9Wo6kta1isuAllLWHsFK5pTC1IPYtT+Qo61xPn6j9wa/Pz1Y=
 # SIG # End signature block
