@@ -64,7 +64,7 @@ zero\testadmin
 PS C:\Users\zeroadmin> $MyElevatedSession = New-SudoSession -Credentials $ZeroAdminCreds
 PS C:\Users\zeroadmin> Invoke-Command -Session $MyElevatedSession.ElevatedPSSession -Scriptblock {Install-Package Nuget.CommandLine -Source chocolatey}
 ...
-# When you're finished running commands against this Sudo Session, remove it via:
+# When you are finished running commands against this Sudo Session, remove it via:
 PS C:\Users\zeroadmin> Remove-SudoSession -OriginalConfigInfo $MyElevatedSesion.WSManAndRegistryChanges -SessionToRemove $MyElevatedSession.ElevatedPSSession
 
 ```
