@@ -82,7 +82,7 @@ function Start-SudoSession {
             Mandatory=$False,
             ParameterSetName='Supply UserName and Password'
         )]
-        [string]$UserName = $([System.Security.Principal.WindowsIdentity]::GetCurrent().Name -split "\\")[-1],
+        [string]$UserName,
 
         [Parameter(
             Mandatory=$False,
@@ -108,25 +108,33 @@ function Start-SudoSession {
         return
     }
 
-    if ($ScriptBlock -and $StringExpression) {
-        Write-Error "The function $(MyInvocation.MyCommand.Name) takes EITHER the -ScriptBlock parameter (position 0) OR the -StringExpression parameter! Halting!"
-        $global:FunctionResult = "1"
-        return
+    if (!$UserName) {
+        $UserName = GetCurrentUser
     }
+    $SimpleUserName = $($UserName -split "\\")[-1]
 
     if ($global:SudoCredentials) {
         if (!$Credentials) {
-            if ($Username -match "\\") {
-                $UserName = $($UserName -split "\\")[-1]
-            }
             if ($global:SudoCredentials.UserName -match "\\") {
                 $SudoUserName = $($global:SudoCredentials.UserName -split "\\")[-1]
             }
             else {
                 $SudoUserName = $global:SudoCredentials.UserName
             }
-            if ($SudoUserName -match $UserName) {
+
+            if ($SudoUserName -eq $SimpleUserName) {
                 $Credentials = $global:SudoCredentials
+            }
+            elseif ($PSBoundParameters['UserName']) {
+                Remove-Variable -Name SudoCredentials -Force -ErrorAction SilentlyContinue
+            }
+            elseif (!$PSBoundParameters['UserName']) {
+                $ErrMsg = "The -UserName parameter was not used, so default current user (i.e. $(whoami)) " +
+                "was used. The Sudo Credentials available in the `$global:SudoCredentials object reference UserName " +
+                "$($global:SudoCredentials.UserName), which does not match $(whoami)! Halting!"
+                Write-Error $ErrMsg
+                $global:FunctionResult = "1"
+                return
             }
         }
         else {
@@ -143,11 +151,10 @@ function Start-SudoSession {
         $Credentials = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $UserName, $Password
     }
 
-    if ($Credentials.UserName -match "\\") {
-        $UserName = $($Credentials.UserName -split "\\")[-1]
-    }
-    if ($Username -match "\\") {
-        $UserName = $($UserName -split "\\")[-1]
+    if ($Credentials.UserName -notmatch "\\") {
+        Write-Error "The UserName provided to the `$Credentials object is not in the correct format! Please use a UserName with format <Domain>\<User> or <HostName>\<User>! Halting!"
+        $global:FunctionResult = "1"
+        return
     }
 
     $global:SudoCredentials = $Credentials
@@ -242,11 +249,13 @@ function Start-SudoSession {
 
 
 
+
+
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUCbeOJAUZdSmre3yvWTyGa/F4
-# hEOgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQU3C41cx06XT7P55Hym2fZo6ny
+# JLagggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -303,11 +312,11 @@ function Start-SudoSession {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFAaPnx1YmwgNGKUq
-# EHtv0WvX8vSrMA0GCSqGSIb3DQEBAQUABIIBALFKYr2i7goXzgz1N1T5qbALKuSk
-# JAFgMuO1eV4ePcbBylgTcPrBho3LQP4oeD8BxE1A/K+Bx4k7nYrISVB92ooRPbs9
-# sKSYTIToJvzXF5TEN/Rj+I7zdNO9yldfVWLx03mrEk1aKBG4UpauB2gRvBeT3h4m
-# DCarlV3zUHK/Dq+vUZIb7aJkphEWz4RinnzbVflZHhP+Jf01wxI0SSkiX33Lhgmr
-# fzlCYciUDzvtAyKuY/ZkhhmM8cGqGr84z0Ik/xp8lKH4kZj7jG4T5pMRsM/PkVDY
-# kVssCp8I/KStLg9PNhDNYnGcAKr785E5ASxdk3iTUoclZ+2vqApx7rHrbKo=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFJdvU7sWl65Lv7AT
+# U92NXxqKa2p3MA0GCSqGSIb3DQEBAQUABIIBAKlgQ3YRcp/XXclshtBL5YvLMBPN
+# gFkbgBXwSpWzMzGlBfoyqyAF9iJYetGZjWx//kyBZoRqGBo+JF7raVHsEchxApTG
+# /yJ2CfMkp3AepWZF8yH/rp9tgUY8R4kdUKnSOZ4zyIyClvF7OWhPVv6FLvvhUdlG
+# NRtu8wu47/mahv/FLY8ySJUUl/7dgupeJhu1JLxRguRPUsc7vxBqaAt5fH0ejdbs
+# LM/WzMTXLuFD/K0NccTgJQ+5gKRTi0X2+YI6N5b26cxGieyActYzhq414Y6xxcdk
+# mGwfIb+31+0mZoAhFX8yT7NomKTxVPJ3aqiZ7Nsh4n3UWb4Xhinrr1cN3IY=
 # SIG # End signature block
