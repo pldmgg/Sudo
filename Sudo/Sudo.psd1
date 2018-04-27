@@ -12,7 +12,7 @@
 RootModule = 'Sudo.psm1'
 
 # Version number of this module.
-ModuleVersion = '2.0.3'
+ModuleVersion = '2.0.4'
 
 # Supported PSEditions
 # CompatiblePSEditions = @()
@@ -27,7 +27,7 @@ Author = 'pldmgg'
 CompanyName = 'Boop'
 
 # Copyright statement for this module
-Copyright = '(c) 2017 pldmgg. All rights reserved.'
+Copyright = '(c) 2018 pldmgg. All rights reserved.'
 
 # Description of the functionality provided by this module
 Description = 'Use functionality similar to sudo in PowerShell. GitHub: https://github.com/pldmgg/Sudo'
