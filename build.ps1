@@ -149,6 +149,19 @@ if (!$(Get-Module -ListAvailable PSDepend)) {
 try {
     Import-Module PSDepend
     $null = Invoke-PSDepend -Path "$PSScriptRoot\build.requirements.psd1" -Install -Import -Force
+
+    # Hack to fix AppVeyor Error When attempting to Publish to PSGallery
+    # The specific error this fixes is a problem with the Publish-Module cmdlet from PowerShellGet. PSDeploy
+    # calls Publish-Module without the -Force parameter which results in this error: https://github.com/PowerShell/PowerShellGet/issues/79
+    # This is more a problem with PowerShellGet than PSDeploy.
+    Remove-Module PSDeploy
+    $PSDeployScriptToEdit = Get-Childitem -Path $(Get-Module -ListAvailable PSDeploy).ModuleBase -File -Recurse -Filter "PSGalleryModule.ps1"
+    [System.Collections.ArrayList][array]$PSDeployScriptContent = Get-Content $PSDeployScriptToEdit.FullName
+    $LineOfInterest = $($PSDeployScriptContent | Select-String -Pattern ".*?Verbose[\s]+= \`$VerbosePreference").Matches.Value
+    $IndexOfLineOfInterest = $PSDeployScriptContent.IndexOf($LineOfInterest)
+    $PSDeployScriptContent.Insert($($IndexOfLineOfInterest+1),"            Force      = `$True")
+    Set-Content -Path $PSDeployScriptToEdit.FullName -Value $PSDeployScriptContent
+    Import-Module PSDeploy
 }
 catch {
     Write-Error $_
@@ -664,8 +677,8 @@ exit ( [int]( -not $psake.build_success ) )
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQU70SJOscy9wKXN/FIgZldGiCC
-# bt2gggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQU/4+GXRsmsW7/X2Y+Xt76Kf12
+# hF6gggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -722,11 +735,11 @@ exit ( [int]( -not $psake.build_success ) )
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFMF70QwUFdtrgTK3
-# 92fY8i+7ULUwMA0GCSqGSIb3DQEBAQUABIIBAAqEcZIr04KvT5L1hSYQ1xX4j228
-# SN+3OX5X1HGLCg7PJcUQqRH8X72VR0QL609qeuN0pD9NDKA4l3qJthcydWv/DKJG
-# BqApCzcckVHlYnOSgEjRoMVADOB1fkvbwLbENPLzI9F2D6L2khzkOQORD8hx0xtR
-# asHf9/sugSnNXjT/nx12cVf1L3ZHtcygT1Goc7vzW+no2+c1ieahoqb7lANLQ3oy
-# CJ/rolfewmoPf6sO5L9Zi+ZIMO7N/NNREbyTUjxM9O54aWEkWaZLEw48M7x0vryF
-# 7Nx1H2hYt5fiGnpswB/qyqVBnWgZ5FojCAJMAh9LSxJHIfpx0RbFgBDGTtg=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFMwsDfU78C58gosw
+# A8Rbw1PIrbK3MA0GCSqGSIb3DQEBAQUABIIBAMAyQOs06mWf3QKyExuv7ti/KVwB
+# nLlYWpodtlADm89iKGmWSanHYhtnkjRfaSGp2U/WtbOCO0vKiB6KaQbjJUeKtq8+
+# K4IonfUDgcMwGVEyuQHcVH6GW7R2Unn690ByrtJr7Unqonc4OCDV3pVoEmis8Epw
+# ZeEnvEczNsqOHh8ims0Qw0O5uYPYAg8VnGU32XYdKrJ3XS/koYCRGpjEr9DIe2o6
+# 60FqBtX28qJhtLTqY0eOh9MIaS+sl7PF3NimKYjBKSV5P28T4BEWuc7zeoIxDpd9
+# qlohaccJ00atVVD2f2+1HpqgRhjFfbi3lH0B3N2KAKtJGwglv6a2RTZHXV4=
 # SIG # End signature block
