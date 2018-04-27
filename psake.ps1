@@ -174,7 +174,7 @@ Task Deploy -Depends Build {
     $lines
 
     $Params = @{
-        Path = $ProjectRoot
+        Path = $PSScriptRoot
         Force = $true
         Recurse = $false
     }
