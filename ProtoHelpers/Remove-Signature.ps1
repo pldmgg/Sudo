@@ -1,25 +1,55 @@
-function GetElevation {
-    if ($PSVersionTable.PSEdition -eq "Desktop" -or $PSVersionTable.Platform -eq "Win32NT" -or $PSVersionTable.PSVersion.Major -le 5) {
-        [System.Security.Principal.WindowsPrincipal]$currentPrincipal = New-Object System.Security.Principal.WindowsPrincipal(
-            [System.Security.Principal.WindowsIdentity]::GetCurrent()
-        )
+# From: http://psrdrgz.github.io/RemoveAuthenticodeSignature/
+function Remove-Signature {
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $False,Position = 0,ValueFromPipeline = $True,ValueFromPipelineByPropertyName = $True)]
+        [Alias('Path')]
+        [string[]]$FilePath
+    )
 
-        [System.Security.Principal.WindowsBuiltInRole]$administratorsRole = [System.Security.Principal.WindowsBuiltInRole]::Administrator
-
-        if($currentPrincipal.IsInRole($administratorsRole)) {
-            return $true
-        }
-        else {
-            return $false
+    # Make sure they all exist
+    [System.Collections.ArrayList]$FileNotFound = @()
+    foreach ($FullPath in $FilePath) { 
+        if (!$(Test-Path $FullPath)) {
+            Write-Warning "The path $FullPath does not exist!"
+            $null = $FileNotFound.Add($FullPath)
         }
     }
-    
-    if ($PSVersionTable.Platform -eq "Unix") {
-        if ($(whoami) -eq "root") {
-            return $true
+    if ($FileNotFound.Count -gt 0) {
+        Write-Error "Unable to find one or more File Paths provided to teh -FilePath parameter! No action taken. Halting!"
+        $global:FunctionResult = "1"
+        return
+    }
+
+    $SingatureLineRegex = '^# SIG # Begin signature block|^<!-- SIG # Begin signature block -->'
+
+    foreach ($FullPath in $FilePath) {
+        try {
+            $Content = Get-Content $FullPath -ErrorAction Stop
         }
-        else {
-            return $false
+        catch {
+            Write-Error $_
+            continue
+        }
+
+        if ($(Get-Item $FullPath).Extension -match '\.ps1|\.psm1|\.psd1|\.ps1xml' -and $Content -match $SingatureLineRegex) {
+            try {
+                $StringBuilder = New-Object -TypeName System.Text.StringBuilder -ErrorAction Stop
+
+                foreach ($Line in $Content) {
+                    if ($Line -match $SingatureLineRegex) {
+                        Break
+                    }
+                    else {
+                        $null = $StringBuilder.AppendLine($Line)
+                    }
+                }
+
+                Set-Content -Path $FullPath -Value $StringBuilder.ToString()
+            }
+            catch {
+                Write-Error -Message $_.Exception.Message
+            }
         }
     }
 }
@@ -30,11 +60,16 @@ function GetElevation {
 
 
 
+
+
+
+
+
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQU4Vq4eI5G4bHaGLlH9fbCKfaE
-# p7qgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQU1+JkMxZwB4K9PNnMGNyoi3My
+# RbKgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -91,11 +126,11 @@ function GetElevation {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFF1VSxL6ATy9Op0b
-# CWOQi8Bw4DXDMA0GCSqGSIb3DQEBAQUABIIBAD+3eGj3o6EEhyOyVubXGLYbRk9e
-# Gu4oVO4qV4qGe8xRGKJUE+6vgfaGaWDtbCa0oUBc6p5phcykJpgGm1yC0DC39eWS
-# jf+SZgYyWVyqa92EzEdtFm3JQpOZfPSh7AQJAfx4Ib9jnmWh4l9lA6cqMKV3+KJ+
-# ZLQ42U/NZAxJHLjmYlqG3AFbbFEnIQhyKKCRLT265rUpzRoVTzQ6krj4Y0T307qV
-# PTJVxmHXdc66E+aKjet+nRKtKVctDkKLFElaVhQQeY2VSw+S83V2fW9Q6pUEoi0V
-# CKEpTW84/dxTCZxc0CX+fZV7+IOUSgVS0fzgAeqp9onkjAFVuSGuWy4c6K4=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFNzOGP5SAept+R0H
+# UOOw6Cm8raHpMA0GCSqGSIb3DQEBAQUABIIBAFcotTgDjpdz3gyA4Dtup09PixDW
+# JOuLaTHtcNO8gD5UYwX6mafT2rhMjx+up5nKmXuOSjYtwgTB1bmVxr74hh2iNWe6
+# tpq2ar18HDCx3b00cTNC/ZHerwvEYA7zsgfVaBguQ9Ky2vhmISKewKRR+9rKuIJ+
+# u7X+geIDJU2WExOGzFmI9I5CWuxPePE/34o3SAYbQGnfyF+n0PT7cWyMvweVIB8S
+# fJDX3SbRAauaAqwV/jR5FDuIYVKMSQ+WvuijHey6Fq+K0kiPRETOwUfJOLBwhdj+
+# zKAKH/E1FeYfLkpzCMwRMfTDraFXdP/G+Vv81UmG5YO+5yUO8YIsFdhmmps=
 # SIG # End signature block

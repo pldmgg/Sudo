@@ -4,11 +4,11 @@
 
     .DESCRIPTION
         Using WSMan's CredSSP Authentication mechanism, this function creates a New PSSession via the New-PSSession
-        cmdlet named "ElevatedPSSessionFor<UserName>". You can then run elevated commands in the Elevated PSSession by
-        either entering the Elevated PSSession via Enter-PSSession cmdlet or by using the Invoke-Command cmdlet with
-        its -Session parameter.
+        cmdlet named "Sudo<UserName>". You can then run elevated commands in the Elevated PSSession by
+        either entering the Elevated PSSession via the Enter-PSSession cmdlet or by using the Invoke-Command cmdlet with
+        its -Session and -ScriptBlock parameters.
 
-        This function will NOT run in a PowerShell Session that was launched using "Run As Administrator".
+        This function will NOT run in a PowerShell Session that is already elevated (i.e. launched using "Run As Administrator").
 
         When used in a Non-Elevated PowerShell session, this function:
 
@@ -21,7 +21,7 @@
 
         3) Creates an Elevated PSSession using the New-PSSession cmdlet
 
-        4) Outputs a PSCustomObject that contains two Properties:
+        4) Outputs a PSCustomObject that contains four Properties:
         - ElevatedPSSession - Contains the object [PSSession]ElevatedPSSessionFor<UserName>
         - WSManAndRegistryChanges - Contains another PSCustomObject with the following Properties -
             [bool]WinRMStateChange
@@ -29,6 +29,15 @@
             [bool]WSMANClientCredSSPStateChange
             [System.Collections.ArrayList]RegistryKeyCreated
             [System.Collections.ArrayList]RegistryKeyPropertiesCreated
+        - ConfigChangesFilePath - Path to the .xml file that logs exactly what changes (if any) were made to WSMAN/CredSSP
+        - RevertedChangesFilePath - Path to the .xml file that logs exactly what changes (if any) were made to WSMAN/CredSSP when
+        reverting configuration back to what it was prior to using the New-SudoSession function
+
+        IMPORTANT NOTE: By default, all changes made to WSMAN/CredSSP are immediately reverted after the Sudo PSSession has
+        been Opened. The Sudo Session will stay open for approximately 3 minutes in this state. If you would like to keep
+        the Sudo Session open indefinitely and delay reverting WSMAN/CredSSP configuration changes, use the -KeepOpen
+        switch. If the -KeepOpen switch is used the aforementioned 'RevertedChangesFilePath' will be $null (because nothing
+        gets reverted until you use the Remove-SudoSession function).
 
     .NOTES
         Recommend assigning this function to a variable when it is used so that it can be referenced in the companion
@@ -39,43 +48,57 @@
         can be used for Remove-SudoSession's -SessionToRemove parameter.
 
     .PARAMETER UserName
-        This is a string that represents a UserName with Administrator privileges. Defaults to current user.
+        This parameter takes a string that represents a UserName with Administrator privileges. Defaults to current user.
 
         This parameter is mandatory if you do NOT use the -Credentials parameter.
 
     .PARAMETER Password
-        This can be either a plaintext string or a secure string that represents the password for the -UserName.
+        This parameter takes a SecureString that represents the Password for the user specified by -UserName.
 
         This parameter is mandatory if you do NOT use the -Credentials parameter.
 
     .PARAMETER Credentials
-        This is a System.Management.Automation.PSCredential object used to create an elevated PSSession.
+        This parameter takes a System.Management.Automation.PSCredential object with Administrator privileges.
+
+        This parameter is mandatory if you do NOT use the -Password parameter.
+
+    .PARAMETER KeepOpen
+        This parameter is a switch.
+
+        If used, the configuration changes made to WSMan/CredSSP will remain until you specifically use the Remove-SudoSession
+        function. This allows the Sudo Session to stay open for longer than 3 minutes.
+
+    .PARAMETER SuppressTimeWarning
+        This parameter is a switch.
+
+        If used, it will suppress the warning regarding the new Sudo Session only staying open for approximately 3 minutes.
 
     .EXAMPLE
-        PS C:\Users\zeroadmin> New-SudoSession -UserName zeroadmin -Credentials $MyCreds
+        PS C:\Users\zeroadmin> New-SudoSession
+        Please enter the password for zero\zeroadmin: ************
 
         ElevatedPSSession                      WSManAndRegistryChanges
         -----------------                      ------------------------------
-        [PSSession]ElevatedSessionForzeroadmin 
+        [PSSession]Sudozeroadmin 
 
         PS C:\Users\zeroadmin> Get-PSSession
 
         Id Name            ComputerName    ComputerType    State         ConfigurationName     Availability
         -- ----            ------------    ------------    -----         -----------------     ------------
-        1 ElevatedSess... localhost       RemoteMachine   Opened        Microsoft.PowerShell     Available
+        1 Sudozeroadmin    localhost       RemoteMachine   Opened        Microsoft.PowerShell     Available
 
-        PS C:\Users\zeroadmin> Enter-PSSession -Name ElevatedSessionForzeroadmin
+        PS C:\Users\zeroadmin> Enter-PSSession -Name Sudozeroadmin
         [localhost]: PS C:\Users\zeroadmin\Documents> 
 
     .EXAMPLE
-        PS C:\Users\zeroadmin> $MyElevatedSession = New-SudoSession -UserName zeroadmin -Credentials $MyCreds
+        PS C:\Users\zeroadmin> $SudoSessionInfo = New-SudoSession -Credentials $TestAdminCreds
         PS C:\Users\zeroadmin> Get-PSSession
 
         Id Name            ComputerName    ComputerType    State         ConfigurationName     Availability
         -- ----            ------------    ------------    -----         -----------------     ------------
-        1 ElevatedSess... localhost       RemoteMachine   Opened        Microsoft.PowerShell     Available
+        1 Sudotestadmin    localhost       RemoteMachine   Opened        Microsoft.PowerShell     Available
 
-        PS C:\Users\zeroadmin> Invoke-Command -Session $MyElevatedSession.ElevatedPSSession -Scriptblock {Install-Package Nuget.CommandLine -Source chocolatey}
+        PS C:\Users\zeroadmin> Invoke-Command -Session $SudoSessionInfo.ElevatedPSSession -Scriptblock {Install-Package Nuget.CommandLine -Source chocolatey}
 
     .OUTPUTS
         See DESCRIPTION and NOTES sections
@@ -88,7 +111,8 @@ function New-SudoSession {
             Mandatory=$False,
             ParameterSetName='Supply UserName and Password'
         )]
-        [string]$UserName = $([System.Security.Principal.WindowsIdentity]::GetCurrent().Name -split "\\")[-1],
+        [ValidatePattern("[\w]+\\[\w]+")]
+        [string]$UserName,
 
         [Parameter(
             Mandatory=$False,
@@ -112,7 +136,7 @@ function New-SudoSession {
         # being open for 3 minutes since that doesn't apply to the Start-SudoSession function (where it's only open
         # for the duration of the scriptblock you run)
         [Parameter(Mandatory=$False)]
-        [switch]$StartSudo
+        [switch]$SuppressTimeWarning
     )
 
     ##### BEGIN Variable/Parameter Transforms and PreRun Prep #####
@@ -123,19 +147,33 @@ function New-SudoSession {
         return
     }
 
+    if (!$UserName) {
+        $UserName = GetCurrentUser
+    }
+    $SimpleUserName = $($UserName -split "\\")[-1]
+
     if ($global:SudoCredentials) {
         if (!$Credentials) {
-            if ($Username -match "\\") {
-                $UserName = $($UserName -split "\\")[-1]
-            }
             if ($global:SudoCredentials.UserName -match "\\") {
                 $SudoUserName = $($global:SudoCredentials.UserName -split "\\")[-1]
             }
             else {
                 $SudoUserName = $global:SudoCredentials.UserName
             }
-            if ($SudoUserName -match $UserName) {
+
+            if ($SudoUserName -eq $SimpleUserName) {
                 $Credentials = $global:SudoCredentials
+            }
+            elseif ($PSBoundParameters['UserName']) {
+                Remove-Variable -Name SudoCredentials -Force -ErrorAction SilentlyContinue
+            }
+            elseif (!$PSBoundParameters['UserName']) {
+                $ErrMsg = "The -UserName parameter was not used, so default current user (i.e. $(whoami)) " +
+                "was used. The Sudo Credentials available in the `$global:SudoCredentials object reference UserName " +
+                "$($global:SudoCredentials.UserName), which does not match $(whoami)! Halting!"
+                Write-Error $ErrMsg
+                $global:FunctionResult = "1"
+                return
             }
         }
         else {
@@ -152,11 +190,10 @@ function New-SudoSession {
         $Credentials = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $UserName, $Password
     }
 
-    if ($Credentials.UserName -match "\\") {
-        $UserName = $($Credentials.UserName -split "\\")[-1]
-    }
-    if ($Username -match "\\") {
-        $UserName = $($UserName -split "\\")[-1]
+    if ($Credentials.UserName -notmatch "\\") {
+        Write-Error "The UserName provided to the `$Credentials object is not in the correct format! Please use a UserName with format <Domain>\<User> or <HostName>\<User>! Halting!"
+        $global:FunctionResult = "1"
+        return
     }
 
     $global:SudoCredentials = $Credentials
@@ -197,6 +234,8 @@ function New-SudoSession {
     $Output = [ordered]@{}
     [System.Collections.ArrayList]$RegistryKeysCreated = @()
     [System.Collections.ArrayList]$RegistryKeyPropertiesCreated = @()
+    $WinRMStateChange = $False
+
 
     if (!$(Test-WSMan)) {
         try {
@@ -209,9 +248,6 @@ function New-SudoSession {
         }
 
         $Output.Add("WinRMStateChange",$True)
-    }
-    else {
-        $Output.Add("WinRMStateChange",$False)
     }
 
     ##### BEGIN Registry Tweaks under HKLM:\ #####
@@ -227,26 +263,43 @@ function New-SudoSession {
     # (DWORD) called 'ConcatenateDefaults_AllowFresh'
     $CredDelRegLocationProperties = Get-ItemProperty -Path $CredDelRegLocation
     $AllowFreshCredsDWORDExists = $($CredDelRegLocationProperties | Get-Member -Type NoteProperty).Name -contains "AllowFreshCredentials"
-    $ConcatDefAllowFreshDWORDExsits = $($CredDelRegLocationProperties | Get-Member -Type NoteProperty).Name -contains "ConcatenateDefaults_AllowFresh"
+    $ConcatDefAllowFreshDWORDExists = $($CredDelRegLocationProperties | Get-Member -Type NoteProperty).Name -contains "ConcatenateDefaults_AllowFresh"
+    $AllowFreshCredentialsWhenNTLMOnlyDWORDExists = $($CredDelRegLocationProperties | Get-Member -Type NoteProperty).Name -contains "AllowFreshCredentialsWhenNTLMOnly"
+    $ConcatenateDefaults_AllowFreshNTLMOnlyDWORDExists = $($CredDelRegLocationProperties | Get-Member -Type NoteProperty).Name -contains "ConcatenateDefaults_AllowFreshNTLMOnly"
+    
     # The below should be an array of integers
-    [array]$AllowFreshCredsSubKeyCheck = $AllowFreshCredsSubKeyPropertyKeys = Get-ChildItem -Path $CredDelRegLocation | Where-Object {$_.PSChildName -eq "AllowFreshCredentials"}
+    [array]$AllowFreshCredsSubKeyCheck = Get-ChildItem -Path $CredDelRegLocation | Where-Object {$_.PSChildName -match "AllowFreshCredentials"}
 
     # If the two $CredDelRegLocation DWORDs don't exist, create them
     if (!$AllowFreshCredsDWORDExists) {
         $NewAllowFreshCredsProperty = Set-ItemProperty -Path $CredDelRegLocation -Name AllowFreshCredentials -Value 1 -Type DWord -Passthru
         $null = $RegistryKeyPropertiesCreated.Add($NewAllowFreshCredsProperty)
     }
-    if (!$ConcatDefAllowFreshDWORDExsits) {
+    if (!$ConcatDefAllowFreshDWORDExists) {
         $NewConcatenateDefaultsProperty = Set-ItemProperty -Path $CredDelRegLocation -Name ConcatenateDefaults_AllowFresh -Value 1 -Type DWord -Passthru
         $null = $RegistryKeyPropertiesCreated.Add($NewConcatenateDefaultsProperty)
     }
-    if ($AllowFreshCredsSubKeyCheck.Count -eq 0) {
+    if (!$AllowFreshCredentialsWhenNTLMOnlyDWORDExists) {
+        $NewAllowFreshCredsWhenNTLMProperty = Set-ItemProperty -Path $CredDelRegLocation -Name AllowFreshCredentialsWhenNTLMOnly -Value 1 -Type DWord -Passthru
+        $null = $RegistryKeyPropertiesCreated.Add($NewAllowFreshCredsWhenNTLMProperty)
+    }
+    if (!$ConcatenateDefaults_AllowFreshNTLMOnlyDWORDExists) {
+        $NewConcatenateDefaults_AllowFreshNTLMProperty = Set-ItemProperty -Path $CredDelRegLocation -Name ConcatenateDefaults_AllowFreshNTLMOnly -Value 1 -Type DWord -Passthru
+        $null = $RegistryKeyPropertiesCreated.Add($NewConcatenateDefaults_AllowFreshNTLMProperty)
+    }
+
+    if (!$(Test-Path $CredDelRegLocation\AllowFreshCredentials)) {
         $AllowCredentialsKey = New-Item -Path $CredDelRegLocation\AllowFreshCredentials
         $null = $RegistryKeysCreated.Add($AllowCredentialsKey)
-
-        # Should be an array of integers
-        [array]$AllowFreshCredsSubKeyPropertyKeys = $(Get-Item $CredDelRegLocation\AllowFreshCredentials).Property
     }
+    if (!$(Test-Path $CredDelRegLocation\AllowFreshCredentialsWhenNTLMOnly)) {
+        $AllowCredentialsWhenNTLMKey = New-Item -Path $CredDelRegLocation\AllowFreshCredentialsWhenNTLMOnly
+        $null = $RegistryKeysCreated.Add($AllowCredentialsWhenNTLMKey)
+    }
+
+    # Should be an array of integers
+    [array]$AllowFreshCredsSubKeyPropertyKeys = $(Get-Item $CredDelRegLocation\AllowFreshCredentials).Property
+    [array]$AllowFreshCredsWhenNTLMSubKeyPropertyKeys = $(Get-Item $CredDelRegLocation\AllowFreshCredentialsWhenNTLMOnly).Property
 
     if ($AllowFreshCredsSubKeyPropertyKeys.Count -eq 0) {
         $AllowFreshCredsSubKeyNewProperty = Set-ItemProperty -Path $CredDelRegLocation\AllowFreshCredentials -Name 1 -Value $AllowFreshValue -Type String -Passthru
@@ -257,11 +310,27 @@ function New-SudoSession {
             $(Get-ItemProperty $CredDelRegLocation\AllowFreshCredentials).$key
         }
 
-        if ($AllowFreshCredsSubKeyPropertyValues -notcontains $AllowFreshValue) {
+        if ($AllowFreshCredsSubKeyPropertyValues -notmatch [regex]::Escape($AllowFreshValue)) {
             $AllowFreshCredsSubKeyNewProperty = Set-ItemProperty -Path $CredDelRegLocation\AllowFreshCredentials -Name $($AllowFreshCredsSubKeyPropertyKeys.Count+1) -Value $AllowFreshValue -Type String -Passthru
             $null = $RegistryKeyPropertiesCreated.Add($AllowFreshCredsSubKeyNewProperty)
         }
     }
+
+    if ($AllowFreshCredsWhenNTLMSubKeyPropertyKeys.Count -eq 0) {
+        $AllowFreshCredsWhenNTLMSubKeyNewProperty = Set-ItemProperty -Path $CredDelRegLocation\AllowFreshCredentialsWhenNTLMOnly -Name 1 -Value $AllowFreshValue -Type String -Passthru
+        $null = $RegistryKeyPropertiesCreated.Add($AllowFreshCredsWhenNTLMSubKeyNewProperty)
+    }
+    else {
+        [array]$AllowFreshCredsWhenNTLMSubKeyPropertyValues = foreach ($key in $AllowFreshCredsWhenNTLMSubKeyPropertyKeys) {
+            $(Get-ItemProperty $CredDelRegLocation\AllowFreshCredentialsWhenNTLMOnly).$key
+        }
+
+        if ($AllowFreshCredsWhenNTLMSubKeyPropertyValues -notmatch [regex]::Escape($AllowFreshValue)) {
+            $AllowFreshCredsWhenNTLMSubKeyNewProperty = Set-ItemProperty -Path $CredDelRegLocation\AllowFreshCredentialsWhenNTLMOnly -Name $($AllowFreshCredsWhenNTLMSubKeyPropertyKeys.Count+1) -Value $AllowFreshValue -Type String -Passthru
+            $null = $RegistryKeyPropertiesCreated.Add($AllowFreshCredsWhenNTLMSubKeyNewProperty)
+        }
+    }
+
 
     $Output.Add("RegistryKeysCreated",$RegistryKeysCreated)
     $Output.Add("RegistryKeyPropertiesCreated",$RegistryKeyPropertiesCreated)
@@ -292,13 +361,15 @@ function New-SudoSession {
 
     if ($CredSSPServiceSetting -eq 'false') {
         Enable-WSManCredSSP -Role Server -Force
-        $Output.Add("WSMANServerCredSSPStateChange",$True)
+        $WSMANServerCredSSPStateChange = $True
     }
+    $Ouput.Add("WSMANServerCredSSPStateChange",$WSMANServerCredSSPStateChange)
     
     if ($CredSSPClientSetting -eq 'false') {
         Enable-WSManCredSSP -DelegateComputer localhost -Role Client -Force
-        $Output.Add("WSMANClientCredSSPStateChange",$True)
+        $WSMANClientCredSSPStateChange = $True
     }
+    $Output.Add("WSMANClientCredSSPStateChange",$WSMANClientCredSSPStateChange)
 
     ##### END WSMAN Tweaks under WSMAN:\ #####
 
@@ -307,7 +378,7 @@ function New-SudoSession {
     # Create a backup of what we did to the system, just in case the current PowerShell Session is interrupted for some reason
     [pscustomobject]$Output | Export-CliXml $SudoSessionChangesPSObject
 '@ | Set-Content $SystemConfigScriptFilePath
-
+    
     # IMPORTANT NOTE: You CANNOT use the RunAs Verb if UseShellExecute is $false, and you CANNOT use
     # RedirectStandardError or RedirectStandardOutput if UseShellExecute is $true, so we have to write
     # output to a file temporarily
@@ -324,6 +395,7 @@ function New-SudoSession {
         $Process.Start() | Out-Null
     }
     catch {
+        Write-Error $_
         Write-Error "User did not accept the UAC Prompt! Halting!"
         $global:FunctionResult = "1"
         return
@@ -335,12 +407,12 @@ function New-SudoSession {
 
     if (!$KeepOpen) {
         try {
-            $RestoreOriginalSystemConfig = Restore-OriginalSystemConfig -OriginalConfigInfo $SystemConfigScriptResult -ExistingSudoSession $ElevatedPSSession
+            $RestoreOriginalSystemConfig = Restore-OriginalSystemConfig -OriginalConfigInfo $SystemConfigScriptResult -ExistingSudoSession $ElevatedPSSession -Credentials $Credentials
             if (!$RestoreOriginalSystemConfig) {throw "Problem restoring original WSMAN and CredSSP system config! See '$SudoSessionChangesPSObject' for information about what was changed."}
             
             $SudoSessionRevertChangesPSObject = $($(Resolve-Path "$SudoSessionFolder\SudoSession_Config_Revert_Changes_*.xml").Path | foreach {
                 Get-Item $_
-            } | Sort-Object -Property CreationTime)[-1]
+            } | Sort-Object -Property CreationTime)[-1].FullName
         }
         catch {
             Write-Warning $_.Exception.Message
@@ -349,10 +421,12 @@ function New-SudoSession {
     else {
         $WrnMsg = "Please be sure to run `Remove-SudoSession -SessionToRemove '`$(Get-PSSession -Id $($ElevatedPSSession.Id))' before you " +
         "close PowerShell in order to remove the SudoSession and revert WSMAN and CredSSP configuration changes."
+
+        Write-Warning $WrnMsg
     }
 
     New-Variable -Name "NewSessionAndOriginalStatus" -Scope Global -Value $(
-        [pscustomobject]@{
+        [pscustomobject][ordered]@{
             ElevatedPSSession               = $ElevatedPSSession
             WSManAndRegistryChanges         = $SystemConfigScriptResult
             ConfigChangesFilePath           = $SudoSessionChangesPSObject
@@ -365,7 +439,7 @@ function New-SudoSession {
     # Cleanup 
     Remove-Item $SystemConfigScriptFilePath
     
-    if (!$($StartSudo -or $KeepOpen)) {
+    if (!$($SuppressTimeWarning -or $KeepOpen)) {
         Write-Warning "The New SudoSession named '$($ElevatedPSSession.Name)' with Id '$($ElevatedPSSession.Id)' will stay open for approximately 3 minutes!"
     }
 
@@ -377,25 +451,11 @@ function New-SudoSession {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUVk4GajHYKbUY54qY5Nn8PgFY
-# SEqgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUv/nnAWcg86mqOvw1KtG6nhvD
+# Ic6gggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -452,11 +512,11 @@ function New-SudoSession {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFJoW9mSxFH9B/icx
-# 5S+59Q6iVAUzMA0GCSqGSIb3DQEBAQUABIIBAIndFBOPzc210UlK2NTkix5i4LRV
-# d5L/eAjcMF4HFipnLUjQWfkT6RhmfCXQrKw3+OBNU0T0UXVbsVxeXxub/cVcgMNH
-# HyUtomwV9X3HWBX8CQ0EgPAntRM/BGMwi5P/F9HM5grWATIEpXahmRk8VBeom/OT
-# 30edvPe9lBJesaYsFXx1LJCpyT3T/denc++WfFCrDNMp68iFLhWQswXs1deIFKje
-# b3wgfIGp08NoNrv8Avf7mpoSQ1M8z9SovTfiQBi0hV2FAad5VZD4UUDQACQYRHQt
-# ooSfxshLhqO9Wo6kta1isuAllLWHsFK5pTC1IPYtT+Qo61xPn6j9wa/Pz1Y=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFFsGBkY0Sw8maPuB
+# P7sC4uPERYR1MA0GCSqGSIb3DQEBAQUABIIBAExLBQM4gbJ44iNlakWasW5/IUuG
+# hpxrX8DOr/5ppgxQIBvkBOFDHmeWPzVoVVUhIQprYe80k1jMbEj6DtVAHtJaOSYm
+# WS0c+YTCIRc4GwGxhD0OCl1TgHERSVYAj7FzXeTulh/skFSz87IMPbVW6UBWvrh2
+# P1ZaYIm2ht5pNJ4WNVs+gfEbw3yGnEJiktt1Wiw6yu5PYEwbMaQL1LSsEr4+kdLt
+# htmAXOeBZ0xWE/CmFYubIhXcsolOO746H25W0iH2KJ9G163HAwjWpiHnQ9chIcDl
+# bme9YHp6V0qnLQ/8BCb8cOP+HFEj1tqXNon1IHjLW28EYC8zM097Vx4UsHg=
 # SIG # End signature block

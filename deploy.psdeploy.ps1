@@ -1,62 +1,75 @@
-<#
-.SYNOPSIS
-    Bootstrap PSDepend
+# Generic module deployment.
+#
+# ASSUMPTIONS:
+#
+# * folder structure either like:
+#
+#   - RepoFolder
+#     - This PSDeploy file
+#     - ModuleName
+#       - ModuleName.psd1
+#
+#   OR the less preferable:
+#   - RepoFolder
+#     - RepoFolder.psd1
+#
+# * Nuget key in $ENV:NugetApiKey
+#
+# * Set-BuildEnvironment from BuildHelpers module has populated ENV:BHModulePath and related variables
 
-.DESCRIPTION
-    Bootstrap PSDepend
-
-    Why? No reliance on PowerShellGallery
-
-        * Downloads nuget to your ~\ home directory
-        * Creates $Path (and full path to it)
-        * Downloads module to $Path\PSDepend
-        * Moves nuget.exe to $Path\PSDepend (skips nuget bootstrap on initial PSDepend import)
-
-.PARAMETER Path
-    Module path to install PSDepend
-
-    Defaults to Profile\Documents\WindowsPowerShell\Modules
-
-.EXAMPLE
-    .\Install-PSDepend.ps1 -Path C:\Modules
-
-    # Installs to C:\Modules\PSDepend
-#>
-[cmdletbinding()]
-param(
-    [string]$Path = $( Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'WindowsPowerShell\Modules')
+# Publish to gallery with a few restrictions
+if(
+    $env:BHModulePath -and
+    $env:BHBuildSystem -ne 'Unknown' -and
+    $env:BHBranchName -eq "master" -and
+    $env:BHCommitMessage -match '!deploy'
 )
-$ExistingProgressPreference = "$ProgressPreference"
-$ProgressPreference = 'SilentlyContinue'
-try {
-    # Bootstrap nuget if we don't have it
-    if(-not ($NugetPath = (Get-Command 'nuget.exe' -ErrorAction SilentlyContinue).Path)) {
-        $NugetPath = Join-Path $ENV:USERPROFILE nuget.exe
-        if(-not (Test-Path $NugetPath)) {
-            Invoke-WebRequest -uri 'https://dist.nuget.org/win-x86-commandline/latest/nuget.exe' -OutFile $NugetPath
+{
+    Deploy Module {
+        By PSGalleryModule {
+            FromSource $ENV:BHModulePath
+            To PSGallery
+            WithOptions @{
+                ApiKey = $ENV:NugetApiKey
+            }
         }
     }
+}
+else
+{
+    "Skipping deployment: To deploy, ensure that...`n" +
+    "`t* You are in a known build system (Current: $ENV:BHBuildSystem)`n" +
+    "`t* You are committing to the master branch (Current: $ENV:BHBranchName) `n" +
+    "`t* Your commit message includes !deploy (Current: $ENV:BHCommitMessage)" |
+        Write-Host
+}
 
-    # Bootstrap PSDepend, re-use nuget.exe for the module
-    if($path) { $null = mkdir $path -Force }
-    $NugetParams = 'install', 'PSDepend', '-Source', 'https://www.powershellgallery.com/api/v2/',
-                '-ExcludeVersion', '-NonInteractive', '-OutputDirectory', $Path
-    & $NugetPath @NugetParams
-    if (!$(Test-Path "$(Join-Path $Path PSDepend)\nuget.exe")) {
-        Copy-Item -Path $NugetPath -Destination "$(Join-Path $Path PSDepend)\nuget.exe" -Force
+# Publish to AppVeyor if we're in AppVeyor
+if(
+    $env:BHModulePath -and
+    $env:BHBuildSystem -eq 'AppVeyor'
+   )
+{
+    Deploy DeveloperBuild {
+        By AppVeyorModule {
+            FromSource $ENV:BHModulePath
+            To AppVeyor
+            WithOptions @{
+                Version = $env:APPVEYOR_BUILD_VERSION
+            }
+        }
     }
 }
-finally {
-    $ProgressPreference = $ExistingProgressPreference
-}
 
 
-    
+
+
+
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUKszkc/uZRMGcDSHeMgrbvu1p
-# iDKgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUe+U5+83vFuWGRS8tWD/ocDM8
+# wG2gggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -113,11 +126,11 @@ finally {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFI24od0itel3fq5y
-# kqWpdfCpjWXLMA0GCSqGSIb3DQEBAQUABIIBAEHhrhnHZU6TZeyA4SexgTTXbAOM
-# hQ61Nup1eRZpj89EsRvqsUjthBz8VjWWK3lWQZ6GUGjwXXufHyO15JjEL51B6yYV
-# tUwtxIS1X/axrEIDJQsQHsYIht/BuN0v3cx/H/pnUXvGK4nkaXOzM5XEhDhA0mmN
-# VKJO3JDeORf3AxRMqF9NfG0DQAXKxpGs2/zzvGp+dJNOZO/khNAYnvKuRXQtmUNs
-# A01kqACl1zYks3zOTwEaSDXiFFoeOg3Vqgzg5H7mr5Tica1fBA9PkcovXGbgEjZD
-# ZOR7DQHO+eSqQT36k8uPfvorsN0uIDSAuJ0NzkoIcrhCUbdljC9LvnT1v1k=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFBb/fFWiYLtQ/DPS
+# AQDJpksFLBzIMA0GCSqGSIb3DQEBAQUABIIBAB9YRfGSyCCcVPZKP5eQS7tONQxt
+# yW7tUcmyplA5417dd2XAs48o88SRLWT1Lh500M2Xpj0jWfwIKvu9TmnqK6UlZh/X
+# JFDhv2p4aEEhll9S+o9d8DJpBQGQ9C04v5CECb1DzFZRRjx4hikXedDz5K77fCgY
+# GKrujoXOX24GrrnMQRGs/ckvBoGUwL+zY4nbiAnbJLsEGKwbaO5geqZHxqFhkDbV
+# jm4secnhkz/GY0aqXHdKAOfco3YQzmZpvryrSOM6XTzJLJ26XgJxwHa1MsOmTrBL
+# JhGjLJB+Xr92JNBabSEQ60+impepxH67sTtpdicyUZZFAJ+dKR5kNRuSyrE=
 # SIG # End signature block

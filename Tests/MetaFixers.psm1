@@ -1,44 +1,116 @@
-﻿@{
-    # Some defaults for all dependencies
-    PSDependOptions = @{
-        Target = '$ENV:USERPROFILE\Documents\WindowsPowerShell\Modules'
-        AddToPath = $True
-    }
+<#
+    .SYNOPSIS
+        Fixes problems found by Meta.Tests.ps1
+#>
 
-    # Grab some modules without depending on PowerShellGet
-    'psake' = @{
-        DependencyType = 'PSGalleryNuget'
-    }
-    'PSDeploy' = @{
-        DependencyType = 'PSGalleryNuget'
-        Version = '0.2.2'
-    }
-    'BuildHelpers' = @{
-        DependencyType = 'PSGalleryNuget'
-        Version = '0.0.53'
-    }
-    'Pester' = @{
-        DependencyType = 'PSGalleryNuget'
-        Version = '4.1.0'
-    }
+$errorActionPreference = 'Stop'
+Set-StrictMode -Version 'Latest'
+
+$TestHelpersModulePath = "$PSScriptRoot\TestHelpers.psm1"
+Import-Module -Name $TestHelpersModulePath
+
+<#
+    .SYNOPSIS
+        Converts the given file to UTF8 encoding.
+
+    .PARAMETER FileInfo
+        The file to convert.
+#>
+function ConvertTo-UTF8
+{
+    [CmdletBinding()]
+    param
+    (
+        [Parameter(ValueFromPipeline = $true, Mandatory = $true)]
+        [System.IO.FileInfo]
+        $FileInfo
+    )
+
+    $fileContent = Get-Content -Path $FileInfo.FullName -Encoding 'Unicode' -Raw
+    [System.IO.File]::WriteAllText($FileInfo.FullName, $fileContent, [System.Text.Encoding]::UTF8)
 }
 
+<#
+    .SYNOPSIS
+        Converts the given file to ASCII encoding.
 
+    .PARAMETER FileInfo
+        The file to convert.
+#>
+function ConvertTo-ASCII
+{
+    [CmdletBinding()]
+    param
+    (
+        [Parameter(ValueFromPipeline = $true, Mandatory = $true)]
+        [System.IO.FileInfo]
+        $FileInfo
+    )
 
+    $fileContent = Get-Content -Path $FileInfo.FullName -Encoding 'Unicode' -Raw
+    [System.IO.File]::WriteAllText($FileInfo.FullName, $fileContent, [System.Text.Encoding]::ASCII)
+}
 
+function Convert-TabsToSpaceIndentation
+{
+    [CmdletBinding()]
+    param
+    (
+        [Parameter(ValueFromPipeline = $true, Mandatory = $true)]
+        [System.IO.FileInfo]
+        $FileInfo
+    )
 
+    $fileContent = Get-Content -Path $FileInfo.FullName -Encoding 'Unicode' -Raw
+    $newFileContent = $fileContent.Replace("`t", '    ')
+    [System.IO.File]::WriteAllText($FileInfo.FullName, $newFileContent)
+}
 
+function Get-UnicodeFilesList
+{
+    [OutputType([System.IO.FileInfo[]])]
+    [CmdletBinding()]
+    param
+    (
+        [Parameter(Mandatory = $true)]
+        [String]
+        $Root
+    )
 
+    return Get-TextFilesList -Root $Root | Where-Object { Test-FileInUnicode $_ }
+}
 
+function Add-NewLineAtEndOfFile
+{
+    [CmdletBinding()]
+    param
+    (
+        [Parameter(ValueFromPipeline = $true, Mandatory = $true)]
+        [System.IO.FileInfo]
+        $FileInfo
+    )
 
+    $fileContent = Get-Content -Path $FileInfo.FullName -Raw
+    $fileContent += "`r`n"
+    [System.IO.File]::WriteAllText($FileInfo.FullName, $fileContent)
+}
 
+function Test-FileInUnicode {
+    [CmdletBinding()]
+    [OutputType([bool])]
+    param(
+        [Parameter(ValueFromPipeline = $true, Mandatory = $true)]
+        [System.IO.FileInfo]$fileInfo
+    )
 
+    process {
+        $path = $fileInfo.FullName
+        $bytes = [System.IO.File]::ReadAllBytes($path)
+        $zeroBytes = @($bytes -eq 0)
+        return [bool]$zeroBytes.Length
 
-
-
-
-
-
+    }
+}
 
 
 
@@ -47,8 +119,8 @@
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUAVsx7cTBcVOfPeRTokB3cuLs
-# oMagggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUhUFZ0EqKiTuB11s/I1hfzsht
+# I5Cgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -105,11 +177,11 @@
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFG0WKLMieugeub9u
-# ADKDwKUJ+8t+MA0GCSqGSIb3DQEBAQUABIIBAFoNb5YkGc1N8Zv2GywobOrcpxSo
-# QDMGFdatAbbaXDvdTPek9pHezOJnTLNBlvnAziRS7CPayINQr8imK+MERgOD4OAP
-# soRd/g1jytBRxQD/vcI5mEiSllLL6nFcY4XmOADcY2zhEqplkY+PMK8HxJQWLwe6
-# aLasY2TlA5PaMtRXmoIgjgNuxv+88Jrz778nllYsl7LPiUMhzGE6xR2hhTzT3jj6
-# BfBxzqcs31IRahR/ms4d1xV7HxQipVHgyF7YYhrxbjOmh922ozIqMejpm+Ukja8e
-# FwcJ/TKfd5hU+YTKkRF5xcPpiDYXzyncLSxE55sYufpAXQHHv3ku0wEEjbY=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFMUCZU/YsFEfzgvX
+# U+HO/gOx+WZ4MA0GCSqGSIb3DQEBAQUABIIBAMMBqWQmKGNUsVu8Nf7Pc8L2tEYT
+# j3nK36VvP+SujkEf2IUXximnsiQrRiE2VLJ6WxMDA+X5d83ASsxgX0QAJPZ5oSyR
+# vAp7Ll44I9MgaqklIW2uoE8EJeP+2HUZngAW/6jaV/28jdbm9boE7kYCz2ve2i7n
+# SzQ3mDMQI2TAnBhkQkY3bnBtc+cwYXqAV84OY3fkZ7/HFeLBp5qlnu93yqxdu7CC
+# AcNOf3BZ2ixTsATYRJKO9EzumI2GukGgDXMQ//j7aLJ3u10sQYob96R+g+ZaWaAV
+# 3yWfvrpxtwdsDa51RLsVqrj7PXSLSp9M4+f4w+R0qkyehwaYcdZixx1C8sg=
 # SIG # End signature block

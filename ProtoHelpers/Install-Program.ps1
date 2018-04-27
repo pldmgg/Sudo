@@ -1,27 +1,60 @@
-function GetElevation {
-    if ($PSVersionTable.PSEdition -eq "Desktop" -or $PSVersionTable.Platform -eq "Win32NT" -or $PSVersionTable.PSVersion.Major -le 5) {
-        [System.Security.Principal.WindowsPrincipal]$currentPrincipal = New-Object System.Security.Principal.WindowsPrincipal(
-            [System.Security.Principal.WindowsIdentity]::GetCurrent()
-        )
+[CmdletBinding()]
+Param (
+    [Parameter(Mandatory=$True)]
+    [System.Collections.Hashtable[]]$ProgramsArrayOfHashTables
+)
 
-        [System.Security.Principal.WindowsBuiltInRole]$administratorsRole = [System.Security.Principal.WindowsBuiltInRole]::Administrator
+try {
+    Import-Module "$PSScriptRoot\ProgramInstallation.psm1" -WarningAction SilentlyContinue
+    if (![bool]$(Get-Module -Name ProgramInstallation)) {throw "There was a problem importing the Module ProgramInstallation.psm1! Halting!"}
+}
+catch {
+    Write-Error $_
+    $global:FunctionResult = "1"
+    return
+}
 
-        if($currentPrincipal.IsInRole($administratorsRole)) {
-            return $true
+# Validate the HashTables
+[System.Collections.ArrayList]$InvalidHashTables = @()
+foreach ($ProgramHT in $ProgramsArrayOfHashTables) {
+    if ($ProgramHT.Keys.Count -ne 2) {
+        $null = $InvalidHashTables.Add($ProgramHT)
+        continue
+    }
+
+    if (!$($ProgramHT.Keys -contains "ProgramName" -and $ProgramHT.Keys -contains "CommandName")) {
+        $null = $InvalidHashTables.Add($ProgramHT)
+        continue
+    }
+}
+
+if ($InvalidHashTables.Count -gt 0) {
+    Write-Error "One or more HashTables provided to the -ProgramsArrayOfHashTables parameter are not valid! They must contain 2 key/value pairs with keys named 'ProgramName' and 'CommandName'! Halting!"
+    $global:FunctionResult = "1"
+    return
+}
+
+[System.Collections.ArrayList]$InstallProgramIssues = @()
+[System.Collections.ArrayList]$InstallProgramSuccess = @()
+foreach ($ProgramHT in $ProgramsArrayOfHashTables) {
+    if (![bool]$(Get-Command $ProgramHT['CommandName'] -ErrorAction SilentlyContinue)) {
+        Write-Host "Installing $($ProgramHT['ProgramName']) ..."
+
+        try {
+            $InstallProgramResult = Install-Program @ProgramHT -ErrorAction Stop -WarningAction SilentlyContinue
+            if (!$InstallProgramResult) {throw "There was a problem installing $($ProgramHT['ProgramName']) with the Install-Program function!"}
+            $null = $InstallProgramSuccess.Add($InstallProgramResult)
         }
-        else {
-            return $false
+        catch {
+            Write-Error $_
+            $null = $InstallProgramIssues.Add($ProgramHT)
         }
     }
-    
-    if ($PSVersionTable.Platform -eq "Unix") {
-        if ($(whoami) -eq "root") {
-            return $true
-        }
-        else {
-            return $false
-        }
-    }
+}
+
+[pscustomobject]@{
+    InstallProgramSuccess   = $InstallProgramSuccess
+    InstallProgramIssues    = $InstallProgramIssues
 }
 
 
@@ -33,8 +66,8 @@ function GetElevation {
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQU4Vq4eI5G4bHaGLlH9fbCKfaE
-# p7qgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUxbr2gSLC1yMAtr5MfS0oNx0N
+# vd+gggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -91,11 +124,11 @@ function GetElevation {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFF1VSxL6ATy9Op0b
-# CWOQi8Bw4DXDMA0GCSqGSIb3DQEBAQUABIIBAD+3eGj3o6EEhyOyVubXGLYbRk9e
-# Gu4oVO4qV4qGe8xRGKJUE+6vgfaGaWDtbCa0oUBc6p5phcykJpgGm1yC0DC39eWS
-# jf+SZgYyWVyqa92EzEdtFm3JQpOZfPSh7AQJAfx4Ib9jnmWh4l9lA6cqMKV3+KJ+
-# ZLQ42U/NZAxJHLjmYlqG3AFbbFEnIQhyKKCRLT265rUpzRoVTzQ6krj4Y0T307qV
-# PTJVxmHXdc66E+aKjet+nRKtKVctDkKLFElaVhQQeY2VSw+S83V2fW9Q6pUEoi0V
-# CKEpTW84/dxTCZxc0CX+fZV7+IOUSgVS0fzgAeqp9onkjAFVuSGuWy4c6K4=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFC2rOuk5IlafRpZX
+# 0Xwfy3rBHpuJMA0GCSqGSIb3DQEBAQUABIIBAIzBkqOTwuhoCs1JquzTTd+LzbaW
+# HZYBvKdy16KUvuHTt03DeuulTlzsKMEOIu3Aj/XkQHNGrs0FYOULHqxghs6qXR22
+# VyvHuEoumsqGhtHz65G/CRSTVobXR2nRaTOLGt/VwCEn7ZCkh68rBU3xe3sUsukK
+# Vw2+kR9Vj34SDMenbX6Falr6XQjqV9q7Ie8ZNTqYFHAlZmT2Cqhi+2wYovMtUZX9
+# RrTtEzMM0WHoy8DP/iSa9+aE01YGf95XcT/fBAS1460pz33se5RO0/u6gVIJr7uv
+# TdHQav2y5WJM9NxM0Ir5ZLRojT5KXiuQOH692HpN+EoQgAqsh/Lj3bWRCUU=
 # SIG # End signature block

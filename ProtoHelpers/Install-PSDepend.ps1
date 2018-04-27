@@ -1,97 +1,54 @@
-$PSVersion = $PSVersionTable.PSVersion.Major
-$ModuleName = $ENV:BHProjectName
-$ProjectRoot = $env:BHProjectPath
-$ModuleRoot = $(Get-ChildItem -Path $ProjectRoot -Recurse -File -Include "*.psm1").Directory.FullName
-
-# Verbose output for non-master builds on appveyor
-# Handy for troubleshooting.
-# Splat @Verbose against commands as needed (here or in pester tests)
-$Verbose = @{}
-if($ENV:BHBranchName -notlike "master" -or $env:BHCommitMessage -match "!verbose") {
-    $Verbose.add("Verbose",$True)
-}
-
-Describe -Name "General Project Validation: $ModuleName" -Tag 'Validation' -Fixture {
-    $Scripts = Get-ChildItem $ProjectRoot -Include *.ps1,*.psm1,*.psd1 -Recurse
-
-    # TestCases are splatted to the script so we need hashtables
-    $TestCasesHashTable = $Scripts | foreach {@{file=$_}}         
-    It "Script <file> should be valid powershell" -TestCases $TestCasesHashTable {
-        param($file)
-
-        $file.fullname | Should Exist
-
-        $contents = Get-Content -Path $file.fullname -ErrorAction Stop
-        $errors = $null
-        $null = [System.Management.Automation.PSParser]::Tokenize($contents, [ref]$errors)
-        $errors.Count | Should Be 0
-    }
-
-    It "Module '$ModuleName' Should Load" -Test {
-        {Import-Module $(Join-Path $ModuleRoot "$ModuleName.psd1") -Force} | Should Not Throw
-    }
-
-    It "Module '$ModuleName' Public and Not Private Functions Are Available" {
-        $Module = Get-Module $ModuleName
-        $Module.Name -eq $ModuleName | Should Be $True
-        $Commands = $Module.ExportedCommands.Keys
-        $Commands -contains 'GetElevation' | Should Be $False
-        $Commands -contains 'New-SudoSession' | Should Be $True
-        $Commands -contains 'Start-SudoSession' | Should Be $True
-        $Commands -contains 'Remove-SudoSession' | Should Be $True
-        $Commands -contains 'Restore-OriginalSystemConfig' | Should Be $True
-    }
-
-    It "Module '$ModuleName' Private Functions Are Available in Internal Scope" {
-        $Module = Get-Module $ModuleName
-        [bool]$Module.Invoke({Get-Item function:GetElevation}) | Should Be $True
-    }
-}
-
 <#
-Describe "New-SudoSession" {
-    It "Should return "
-}
-    Context "When there are Changes" {
-    	Mock New-SudoSession {
-            return [pscustomobject]@{
-                ElevatedPSSession               = 
-                WSManAndRegistryChanges         = $SystemConfigScriptResult
-                ConfigChangesFilePath           = $SudoSessionChangesPSObject
-            }
-        }
-    	Mock Get-NextVersion {return 1.2}
-    	Mock Build {} -Verifiable -ParameterFilter {$version -eq 1.2}
+    .SYNOPSIS
+        Bootstrap PSDepend
 
-    	$result = BuildIfChanged
+    .DESCRIPTION
+        Bootstrap PSDepend
 
-	    It "Builds the next version" {
-	        Assert-VerifiableMocks
-	    }
-	    It "returns the next version number" {
-	        $result | Should Be 1.2
-	    }
-    }
-    Context "When there are no Changes" {
-    	Mock Get-Version { return 1.1 }
-    	Mock Get-NextVersion { return 1.1 }
-    	Mock Build {}
+        Why? No reliance on PowerShellGallery
 
-    	$result = BuildIfChanged
+            * Downloads nuget to your ~\ home directory
+            * Creates $Path (and full path to it)
+            * Downloads module to $Path\PSDepend
+            * Moves nuget.exe to $Path\PSDepend (skips nuget bootstrap on initial PSDepend import)
 
-	    It "Should not build the next version" {
-	        Assert-MockCalled Build -Times 0 -ParameterFilter {$version -eq 1.1}
-	    }
-    }
-}
+    .PARAMETER Path
+        Module path to install PSDepend
+
+        Defaults to Profile\Documents\WindowsPowerShell\Modules
+
+    .EXAMPLE
+        .\Install-PSDepend.ps1 -Path C:\Modules
+
+        # Installs to C:\Modules\PSDepend
 #>
+[cmdletbinding()]
+param(
+    [string]$Path = $( Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'WindowsPowerShell\Modules')
+)
+$ExistingProgressPreference = "$ProgressPreference"
+$ProgressPreference = 'SilentlyContinue'
+try {
+    # Bootstrap nuget if we don't have it
+    if(-not ($NugetPath = (Get-Command 'nuget.exe' -ErrorAction SilentlyContinue).Path)) {
+        $NugetPath = Join-Path $ENV:USERPROFILE nuget.exe
+        if(-not (Test-Path $NugetPath)) {
+            Invoke-WebRequest -uri 'https://dist.nuget.org/win-x86-commandline/latest/nuget.exe' -OutFile $NugetPath
+        }
+    }
 
-
-
-
-
-
-
+    # Bootstrap PSDepend, re-use nuget.exe for the module
+    if($path) { $null = mkdir $path -Force }
+    $NugetParams = 'install', 'PSDepend', '-Source', 'https://www.powershellgallery.com/api/v2/',
+                '-ExcludeVersion', '-NonInteractive', '-OutputDirectory', $Path
+    & $NugetPath @NugetParams
+    if (!$(Test-Path "$(Join-Path $Path PSDepend)\nuget.exe")) {
+        Copy-Item -Path $NugetPath -Destination "$(Join-Path $Path PSDepend)\nuget.exe" -Force
+    }
+}
+finally {
+    $ProgressPreference = $ExistingProgressPreference
+}
 
 
 
@@ -100,8 +57,8 @@ Describe "New-SudoSession" {
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUdVBYSNqBRNQ7Ag46VNCVHuji
-# d9Cgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUEYknTfC9eBw/8nBOoI+73OtS
+# 00Ggggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -158,11 +115,11 @@ Describe "New-SudoSession" {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFELrR26CK0jjT18p
-# Wozu6RWDW5UfMA0GCSqGSIb3DQEBAQUABIIBAEZbDB272Ho4WeXKaO5AhOpe8QSN
-# BfktRI5iNxFHnPnVIFhYlwYtxsK1OFaY7F56f8pUmXu3uWtCB2tNc1nX4Pl5nls7
-# MR9PkWzAueD8k4LQpwCz4sC5oJFFH+5Jvefa54UHXQ8YGUcQTYlfvFs7jmPGKV/O
-# p42NFkXE0eVvf/typXr46HeaNpo2y6VMC/e2k6YSpSU0+F75t4ThV2WbnRwlgdsq
-# FTnbo/aLwm9q0m35jN2gQQFrj7Tn/mRTFmWPqjmqsxx0OW6l570P7zWxAsQQJ3RE
-# PULomgDXcDjXsYMgc8hFPANDAuxwaKokUak2+la2KdOksObQjDJgVi0PCMY=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFIvpmO3uRgIYfYvP
+# 4VMAdp73ZP7fMA0GCSqGSIb3DQEBAQUABIIBAHaZy/p/vm2IFjlqL/fZFB3sDH1F
+# FObRnbCeySK2hu9Lamc3g3/4jLSRI/3Y3MnqUkoajqWBrTsYm+HOj8IKMZh581bt
+# z0pvSZ9qnGFGsiEAk0vRHAzXIcckM+gydMoyqnLnKUfE9m0zh8ouxwd/vIzC0nrj
+# qTrx4eVF/Bb0YX5wFUFExjMjBY0c8+EZqIoT5IAYIevE6Ji3x9ng9qsstpukt4ML
+# ygjz/MFbc7jd3Zee/8PurSem/mLCZQtfPfvOuSCW99hZa5dRNMETjYq/6XNI3z1S
+# JSEi2/Mh9EfytQQWoWFPh6TrsX8nmqoRFN3jlmcQbBcGA00m4veDwxLQLUc=
 # SIG # End signature block

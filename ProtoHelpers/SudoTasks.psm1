@@ -1,20 +1,28 @@
-[Net.ServicePointManager]::SecurityProtocol = "tls12, tls11, tls"
+function GetElevation {
+    if ($PSVersionTable.PSEdition -eq "Desktop" -or $PSVersionTable.Platform -eq "Win32NT" -or $PSVersionTable.PSVersion.Major -le 5) {
+        [System.Security.Principal.WindowsPrincipal]$currentPrincipal = New-Object System.Security.Principal.WindowsPrincipal(
+            [System.Security.Principal.WindowsIdentity]::GetCurrent()
+        )
 
-# Get public and private function definition files.
-[array]$Public  = Get-ChildItem -Path "$PSScriptRoot\Public\*.ps1" -ErrorAction SilentlyContinue
-[array]$Private = Get-ChildItem -Path "$PSScriptRoot\Private\*.ps1" -ErrorAction SilentlyContinue
+        [System.Security.Principal.WindowsBuiltInRole]$administratorsRole = [System.Security.Principal.WindowsBuiltInRole]::Administrator
 
-# Dot source the Private functions
-foreach ($import in $Private) {
-    try {
-        . $import.FullName
+        if($currentPrincipal.IsInRole($administratorsRole)) {
+            return $true
+        }
+        else {
+            return $false
+        }
     }
-    catch {
-        Write-Error -Message "Failed to import function $($import.FullName): $_"
+    
+    if ($PSVersionTable.Platform -eq "Unix") {
+        if ($(whoami) -eq "root") {
+            return $true
+        }
+        else {
+            return $false
+        }
     }
 }
-
-# Public Functions
 
 
 <#
@@ -23,11 +31,11 @@ foreach ($import in $Private) {
 
     .DESCRIPTION
         Using WSMan's CredSSP Authentication mechanism, this function creates a New PSSession via the New-PSSession
-        cmdlet named "Sudo<UserName>". You can then run elevated commands in the Elevated PSSession by
-        either entering the Elevated PSSession via the Enter-PSSession cmdlet or by using the Invoke-Command cmdlet with
-        its -Session and -ScriptBlock parameters.
+        cmdlet named "ElevatedPSSessionFor<UserName>". You can then run elevated commands in the Elevated PSSession by
+        either entering the Elevated PSSession via Enter-PSSession cmdlet or by using the Invoke-Command cmdlet with
+        its -Session parameter.
 
-        This function will NOT run in a PowerShell Session that is already elevated (i.e. launched using "Run As Administrator").
+        This function will NOT run in a PowerShell Session that was launched using "Run As Administrator".
 
         When used in a Non-Elevated PowerShell session, this function:
 
@@ -40,7 +48,7 @@ foreach ($import in $Private) {
 
         3) Creates an Elevated PSSession using the New-PSSession cmdlet
 
-        4) Outputs a PSCustomObject that contains four Properties:
+        4) Outputs a PSCustomObject that contains two Properties:
         - ElevatedPSSession - Contains the object [PSSession]ElevatedPSSessionFor<UserName>
         - WSManAndRegistryChanges - Contains another PSCustomObject with the following Properties -
             [bool]WinRMStateChange
@@ -48,90 +56,66 @@ foreach ($import in $Private) {
             [bool]WSMANClientCredSSPStateChange
             [System.Collections.ArrayList]RegistryKeyCreated
             [System.Collections.ArrayList]RegistryKeyPropertiesCreated
-        - ConfigChangesFilePath - Path to the .xml file that logs exactly what changes (if any) were made to WSMAN/CredSSP
-        - RevertedChangesFilePath - Path to the .xml file that logs exactly what changes (if any) were made to WSMAN/CredSSP when
-        reverting configuration back to what it was prior to using the New-SudoSession function
-
-        IMPORTANT NOTE: By default, all changes made to WSMAN/CredSSP are immediately reverted after the Sudo PSSession has
-        been Opened. The Sudo Session will stay open for approximately 3 minutes in this state. If you would like to keep
-        the Sudo Session open indefinitely and delay reverting WSMAN/CredSSP configuration changes, use the -KeepOpen
-        switch. If the -KeepOpen switch is used the aforementioned 'RevertedChangesFilePath' will be $null (because nothing
-        gets reverted until you use the Remove-SudoSession function).
 
     .NOTES
         Recommend assigning this function to a variable when it is used so that it can be referenced in the companion
-        function Remove-SudoSession. If you do NOT assign a variable to this function when it is used, you can always
+        function Remove-SudoSessionTask. If you do NOT assign a variable to this function when it is used, you can always
         reference this function's PSCustomObject output by calling $global:NewSessionAndOriginalStatus, which is a
         Global Scope variable created when this function is run. $global:NewSessionAndOriginalStatus.WSManAndRegistryChanges
-        can be used for Remove-SudoSession's -OriginalConfigInfo parameter, and $global:NewSessionAndOriginalStatus.ElevatedPSSesion
-        can be used for Remove-SudoSession's -SessionToRemove parameter.
+        can be used for Remove-SudoSessionTask's -OriginalConfigInfo parameter, and $global:NewSessionAndOriginalStatus.ElevatedPSSesion
+        can be used for Remove-SudoSessionTask's -SessionToRemove parameter.
 
     .PARAMETER UserName
-        This parameter takes a string that represents a UserName with Administrator privileges. Defaults to current user.
+        This is a string that represents a UserName with Administrator privileges. Defaults to current user.
 
         This parameter is mandatory if you do NOT use the -Credentials parameter.
 
     .PARAMETER Password
-        This parameter takes a SecureString that represents the Password for the user specified by -UserName.
+        This can be either a plaintext string or a secure string that represents the password for the -UserName.
 
         This parameter is mandatory if you do NOT use the -Credentials parameter.
 
     .PARAMETER Credentials
-        This parameter takes a System.Management.Automation.PSCredential object with Administrator privileges.
-
-        This parameter is mandatory if you do NOT use the -Password parameter.
-
-    .PARAMETER KeepOpen
-        This parameter is a switch.
-
-        If used, the configuration changes made to WSMan/CredSSP will remain until you specifically use the Remove-SudoSession
-        function. This allows the Sudo Session to stay open for longer than 3 minutes.
-
-    .PARAMETER SuppressTimeWarning
-        This parameter is a switch.
-
-        If used, it will suppress the warning regarding the new Sudo Session only staying open for approximately 3 minutes.
+        This is a System.Management.Automation.PSCredential object used to create an elevated PSSession.
 
     .EXAMPLE
-        PS C:\Users\zeroadmin> New-SudoSession
-        Please enter the password for zero\zeroadmin: ************
+        PS C:\Users\zeroadmin> New-SudoSessionTask -UserName zeroadmin -Credentials $MyCreds
 
         ElevatedPSSession                      WSManAndRegistryChanges
         -----------------                      ------------------------------
-        [PSSession]Sudozeroadmin 
+        [PSSession]ElevatedSessionForzeroadmin 
 
         PS C:\Users\zeroadmin> Get-PSSession
 
         Id Name            ComputerName    ComputerType    State         ConfigurationName     Availability
         -- ----            ------------    ------------    -----         -----------------     ------------
-        1 Sudozeroadmin    localhost       RemoteMachine   Opened        Microsoft.PowerShell     Available
+        1 ElevatedSess... localhost       RemoteMachine   Opened        Microsoft.PowerShell     Available
 
-        PS C:\Users\zeroadmin> Enter-PSSession -Name Sudozeroadmin
+        PS C:\Users\zeroadmin> Enter-PSSession -Name ElevatedSessionForzeroadmin
         [localhost]: PS C:\Users\zeroadmin\Documents> 
 
     .EXAMPLE
-        PS C:\Users\zeroadmin> $SudoSessionInfo = New-SudoSession -Credentials $TestAdminCreds
+        PS C:\Users\zeroadmin> $MyElevatedSession = New-SudoSessionTask -UserName zeroadmin -Credentials $MyCreds
         PS C:\Users\zeroadmin> Get-PSSession
 
         Id Name            ComputerName    ComputerType    State         ConfigurationName     Availability
         -- ----            ------------    ------------    -----         -----------------     ------------
-        1 Sudotestadmin    localhost       RemoteMachine   Opened        Microsoft.PowerShell     Available
+        1 ElevatedSess... localhost       RemoteMachine   Opened        Microsoft.PowerShell     Available
 
-        PS C:\Users\zeroadmin> Invoke-Command -Session $SudoSessionInfo.ElevatedPSSession -Scriptblock {Install-Package Nuget.CommandLine -Source chocolatey}
+        PS C:\Users\zeroadmin> Invoke-Command -Session $MyElevatedSession.ElevatedPSSession -Scriptblock {Install-Package Nuget.CommandLine -Source chocolatey}
 
     .OUTPUTS
         See DESCRIPTION and NOTES sections
 
 #>
-function New-SudoSession {
+function New-SudoSessionTask {
     [CmdletBinding(DefaultParameterSetName='Supply UserName and Password')]
     Param(
         [Parameter(
             Mandatory=$False,
             ParameterSetName='Supply UserName and Password'
         )]
-        [ValidatePattern("[\w]+\\[\w]+")]
-        [string]$UserName,
+        [string]$UserName = $([System.Security.Principal.WindowsIdentity]::GetCurrent().Name -split "\\")[-1],
 
         [Parameter(
             Mandatory=$False,
@@ -146,53 +130,39 @@ function New-SudoSession {
         [System.Management.Automation.PSCredential]$Credentials,
 
         # If this switch is not used, then the New SudoSession will only stay open for ~3 minutes.
-        # IMPORTANT NOTE: If it IS used, then either the 'Remove-SudoSession' or 'Restore-OriginalSystemConfig' functions
-        # MUST be used to revert WSMAN and/or CredSSP configurations to what ther were prior to using the 'New-SudoSession' function 
+        # IMPORTANT NOTE: If it IS used, then either the 'Remove-SudoSessionTask' or 'Restore-OriginalSystemConfigTask' functions
+        # MUST be used to revert WSMAN and/or CredSSP configurations to what ther were prior to using the 'New-SudoSessionTask' function 
         [Parameter(Mandatory=$False)]
         [switch]$KeepOpen,
 
-        # Meant for use within Start-SudoSession code. Suppresses warning message about the Elevated PSSession only
-        # being open for 3 minutes since that doesn't apply to the Start-SudoSession function (where it's only open
+        # Meant for use within Start-SudoSessionTask code. Suppresses warning message about the Elevated PSSession only
+        # being open for 3 minutes since that doesn't apply to the Start-SudoSessionTask function (where it's only open
         # for the duration of the scriptblock you run)
         [Parameter(Mandatory=$False)]
-        [switch]$SuppressTimeWarning
+        [switch]$StartSudo
     )
 
     ##### BEGIN Variable/Parameter Transforms and PreRun Prep #####
 
     if (GetElevation) {
-        Write-Error "The current PowerShell Session is already being run with elevated permissions. There is no reason to use the Start-SudoSession function. Halting!"
+        Write-Error "The current PowerShell Session is already being run with elevated permissions. There is no reason to use the Start-SudoSessionTask function. Halting!"
         $global:FunctionResult = "1"
         return
     }
 
-    if (!$UserName) {
-        $UserName = GetCurrentUser
-    }
-    $SimpleUserName = $($UserName -split "\\")[-1]
-
     if ($global:SudoCredentials) {
         if (!$Credentials) {
+            if ($Username -match "\\") {
+                $UserName = $($UserName -split "\\")[-1]
+            }
             if ($global:SudoCredentials.UserName -match "\\") {
                 $SudoUserName = $($global:SudoCredentials.UserName -split "\\")[-1]
             }
             else {
                 $SudoUserName = $global:SudoCredentials.UserName
             }
-
-            if ($SudoUserName -eq $SimpleUserName) {
+            if ($SudoUserName -match $UserName) {
                 $Credentials = $global:SudoCredentials
-            }
-            elseif ($PSBoundParameters['UserName']) {
-                Remove-Variable -Name SudoCredentials -Force -ErrorAction SilentlyContinue
-            }
-            elseif (!$PSBoundParameters['UserName']) {
-                $ErrMsg = "The -UserName parameter was not used, so default current user (i.e. $(whoami)) " +
-                "was used. The Sudo Credentials available in the `$global:SudoCredentials object reference UserName " +
-                "$($global:SudoCredentials.UserName), which does not match $(whoami)! Halting!"
-                Write-Error $ErrMsg
-                $global:FunctionResult = "1"
-                return
             }
         }
         else {
@@ -209,10 +179,11 @@ function New-SudoSession {
         $Credentials = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $UserName, $Password
     }
 
-    if ($Credentials.UserName -notmatch "\\") {
-        Write-Error "The UserName provided to the `$Credentials object is not in the correct format! Please use a UserName with format <Domain>\<User> or <HostName>\<User>! Halting!"
-        $global:FunctionResult = "1"
-        return
+    if ($Credentials.UserName -match "\\") {
+        $UserName = $($Credentials.UserName -split "\\")[-1]
+    }
+    if ($Username -match "\\") {
+        $UserName = $($UserName -split "\\")[-1]
     }
 
     $global:SudoCredentials = $Credentials
@@ -253,8 +224,6 @@ function New-SudoSession {
     $Output = [ordered]@{}
     [System.Collections.ArrayList]$RegistryKeysCreated = @()
     [System.Collections.ArrayList]$RegistryKeyPropertiesCreated = @()
-    $WinRMStateChange = $False
-
 
     if (!$(Test-WSMan)) {
         try {
@@ -267,6 +236,9 @@ function New-SudoSession {
         }
 
         $Output.Add("WinRMStateChange",$True)
+    }
+    else {
+        $Output.Add("WinRMStateChange",$False)
     }
 
     ##### BEGIN Registry Tweaks under HKLM:\ #####
@@ -282,43 +254,26 @@ function New-SudoSession {
     # (DWORD) called 'ConcatenateDefaults_AllowFresh'
     $CredDelRegLocationProperties = Get-ItemProperty -Path $CredDelRegLocation
     $AllowFreshCredsDWORDExists = $($CredDelRegLocationProperties | Get-Member -Type NoteProperty).Name -contains "AllowFreshCredentials"
-    $ConcatDefAllowFreshDWORDExists = $($CredDelRegLocationProperties | Get-Member -Type NoteProperty).Name -contains "ConcatenateDefaults_AllowFresh"
-    $AllowFreshCredentialsWhenNTLMOnlyDWORDExists = $($CredDelRegLocationProperties | Get-Member -Type NoteProperty).Name -contains "AllowFreshCredentialsWhenNTLMOnly"
-    $ConcatenateDefaults_AllowFreshNTLMOnlyDWORDExists = $($CredDelRegLocationProperties | Get-Member -Type NoteProperty).Name -contains "ConcatenateDefaults_AllowFreshNTLMOnly"
-    
+    $ConcatDefAllowFreshDWORDExsits = $($CredDelRegLocationProperties | Get-Member -Type NoteProperty).Name -contains "ConcatenateDefaults_AllowFresh"
     # The below should be an array of integers
-    [array]$AllowFreshCredsSubKeyCheck = Get-ChildItem -Path $CredDelRegLocation | Where-Object {$_.PSChildName -match "AllowFreshCredentials"}
+    [array]$AllowFreshCredsSubKeyCheck = $AllowFreshCredsSubKeyPropertyKeys = Get-ChildItem -Path $CredDelRegLocation | Where-Object {$_.PSChildName -eq "AllowFreshCredentials"}
 
     # If the two $CredDelRegLocation DWORDs don't exist, create them
     if (!$AllowFreshCredsDWORDExists) {
         $NewAllowFreshCredsProperty = Set-ItemProperty -Path $CredDelRegLocation -Name AllowFreshCredentials -Value 1 -Type DWord -Passthru
         $null = $RegistryKeyPropertiesCreated.Add($NewAllowFreshCredsProperty)
     }
-    if (!$ConcatDefAllowFreshDWORDExists) {
+    if (!$ConcatDefAllowFreshDWORDExsits) {
         $NewConcatenateDefaultsProperty = Set-ItemProperty -Path $CredDelRegLocation -Name ConcatenateDefaults_AllowFresh -Value 1 -Type DWord -Passthru
         $null = $RegistryKeyPropertiesCreated.Add($NewConcatenateDefaultsProperty)
     }
-    if (!$AllowFreshCredentialsWhenNTLMOnlyDWORDExists) {
-        $NewAllowFreshCredsWhenNTLMProperty = Set-ItemProperty -Path $CredDelRegLocation -Name AllowFreshCredentialsWhenNTLMOnly -Value 1 -Type DWord -Passthru
-        $null = $RegistryKeyPropertiesCreated.Add($NewAllowFreshCredsWhenNTLMProperty)
-    }
-    if (!$ConcatenateDefaults_AllowFreshNTLMOnlyDWORDExists) {
-        $NewConcatenateDefaults_AllowFreshNTLMProperty = Set-ItemProperty -Path $CredDelRegLocation -Name ConcatenateDefaults_AllowFreshNTLMOnly -Value 1 -Type DWord -Passthru
-        $null = $RegistryKeyPropertiesCreated.Add($NewConcatenateDefaults_AllowFreshNTLMProperty)
-    }
-
-    if (!$(Test-Path $CredDelRegLocation\AllowFreshCredentials)) {
+    if ($AllowFreshCredsSubKeyCheck.Count -eq 0) {
         $AllowCredentialsKey = New-Item -Path $CredDelRegLocation\AllowFreshCredentials
         $null = $RegistryKeysCreated.Add($AllowCredentialsKey)
-    }
-    if (!$(Test-Path $CredDelRegLocation\AllowFreshCredentialsWhenNTLMOnly)) {
-        $AllowCredentialsWhenNTLMKey = New-Item -Path $CredDelRegLocation\AllowFreshCredentialsWhenNTLMOnly
-        $null = $RegistryKeysCreated.Add($AllowCredentialsWhenNTLMKey)
-    }
 
-    # Should be an array of integers
-    [array]$AllowFreshCredsSubKeyPropertyKeys = $(Get-Item $CredDelRegLocation\AllowFreshCredentials).Property
-    [array]$AllowFreshCredsWhenNTLMSubKeyPropertyKeys = $(Get-Item $CredDelRegLocation\AllowFreshCredentialsWhenNTLMOnly).Property
+        # Should be an array of integers
+        [array]$AllowFreshCredsSubKeyPropertyKeys = $(Get-Item $CredDelRegLocation\AllowFreshCredentials).Property
+    }
 
     if ($AllowFreshCredsSubKeyPropertyKeys.Count -eq 0) {
         $AllowFreshCredsSubKeyNewProperty = Set-ItemProperty -Path $CredDelRegLocation\AllowFreshCredentials -Name 1 -Value $AllowFreshValue -Type String -Passthru
@@ -329,27 +284,11 @@ function New-SudoSession {
             $(Get-ItemProperty $CredDelRegLocation\AllowFreshCredentials).$key
         }
 
-        if ($AllowFreshCredsSubKeyPropertyValues -notmatch [regex]::Escape($AllowFreshValue)) {
+        if ($AllowFreshCredsSubKeyPropertyValues -notcontains $AllowFreshValue) {
             $AllowFreshCredsSubKeyNewProperty = Set-ItemProperty -Path $CredDelRegLocation\AllowFreshCredentials -Name $($AllowFreshCredsSubKeyPropertyKeys.Count+1) -Value $AllowFreshValue -Type String -Passthru
             $null = $RegistryKeyPropertiesCreated.Add($AllowFreshCredsSubKeyNewProperty)
         }
     }
-
-    if ($AllowFreshCredsWhenNTLMSubKeyPropertyKeys.Count -eq 0) {
-        $AllowFreshCredsWhenNTLMSubKeyNewProperty = Set-ItemProperty -Path $CredDelRegLocation\AllowFreshCredentialsWhenNTLMOnly -Name 1 -Value $AllowFreshValue -Type String -Passthru
-        $null = $RegistryKeyPropertiesCreated.Add($AllowFreshCredsWhenNTLMSubKeyNewProperty)
-    }
-    else {
-        [array]$AllowFreshCredsWhenNTLMSubKeyPropertyValues = foreach ($key in $AllowFreshCredsWhenNTLMSubKeyPropertyKeys) {
-            $(Get-ItemProperty $CredDelRegLocation\AllowFreshCredentialsWhenNTLMOnly).$key
-        }
-
-        if ($AllowFreshCredsWhenNTLMSubKeyPropertyValues -notmatch [regex]::Escape($AllowFreshValue)) {
-            $AllowFreshCredsWhenNTLMSubKeyNewProperty = Set-ItemProperty -Path $CredDelRegLocation\AllowFreshCredentialsWhenNTLMOnly -Name $($AllowFreshCredsWhenNTLMSubKeyPropertyKeys.Count+1) -Value $AllowFreshValue -Type String -Passthru
-            $null = $RegistryKeyPropertiesCreated.Add($AllowFreshCredsWhenNTLMSubKeyNewProperty)
-        }
-    }
-
 
     $Output.Add("RegistryKeysCreated",$RegistryKeysCreated)
     $Output.Add("RegistryKeyPropertiesCreated",$RegistryKeyPropertiesCreated)
@@ -380,15 +319,13 @@ function New-SudoSession {
 
     if ($CredSSPServiceSetting -eq 'false') {
         Enable-WSManCredSSP -Role Server -Force
-        $WSMANServerCredSSPStateChange = $True
+        $Output.Add("WSMANServerCredSSPStateChange",$True)
     }
-    $Ouput.Add("WSMANServerCredSSPStateChange",$WSMANServerCredSSPStateChange)
     
     if ($CredSSPClientSetting -eq 'false') {
         Enable-WSManCredSSP -DelegateComputer localhost -Role Client -Force
-        $WSMANClientCredSSPStateChange = $True
+        $Output.Add("WSMANClientCredSSPStateChange",$True)
     }
-    $Output.Add("WSMANClientCredSSPStateChange",$WSMANClientCredSSPStateChange)
 
     ##### END WSMAN Tweaks under WSMAN:\ #####
 
@@ -397,7 +334,7 @@ function New-SudoSession {
     # Create a backup of what we did to the system, just in case the current PowerShell Session is interrupted for some reason
     [pscustomobject]$Output | Export-CliXml $SudoSessionChangesPSObject
 '@ | Set-Content $SystemConfigScriptFilePath
-    
+
     # IMPORTANT NOTE: You CANNOT use the RunAs Verb if UseShellExecute is $false, and you CANNOT use
     # RedirectStandardError or RedirectStandardOutput if UseShellExecute is $true, so we have to write
     # output to a file temporarily
@@ -414,7 +351,6 @@ function New-SudoSession {
         $Process.Start() | Out-Null
     }
     catch {
-        Write-Error $_
         Write-Error "User did not accept the UAC Prompt! Halting!"
         $global:FunctionResult = "1"
         return
@@ -426,26 +362,24 @@ function New-SudoSession {
 
     if (!$KeepOpen) {
         try {
-            $RestoreOriginalSystemConfig = Restore-OriginalSystemConfig -OriginalConfigInfo $SystemConfigScriptResult -ExistingSudoSession $ElevatedPSSession -Credentials $Credentials
+            $RestoreOriginalSystemConfig = Restore-OriginalSystemConfigTask -OriginalConfigInfo $SystemConfigScriptResult -ExistingSudoSession $ElevatedPSSession
             if (!$RestoreOriginalSystemConfig) {throw "Problem restoring original WSMAN and CredSSP system config! See '$SudoSessionChangesPSObject' for information about what was changed."}
             
             $SudoSessionRevertChangesPSObject = $($(Resolve-Path "$SudoSessionFolder\SudoSession_Config_Revert_Changes_*.xml").Path | foreach {
                 Get-Item $_
-            } | Sort-Object -Property CreationTime)[-1].FullName
+            } | Sort-Object -Property CreationTime)[-1]
         }
         catch {
             Write-Warning $_.Exception.Message
         }
     }
     else {
-        $WrnMsg = "Please be sure to run `Remove-SudoSession -SessionToRemove '`$(Get-PSSession -Id $($ElevatedPSSession.Id))' before you " +
+        $WrnMsg = "Please be sure to run `Remove-SudoSessionTask -SessionToRemove '`$(Get-PSSession -Id $($ElevatedPSSession.Id))' before you " +
         "close PowerShell in order to remove the SudoSession and revert WSMAN and CredSSP configuration changes."
-
-        Write-Warning $WrnMsg
     }
 
     New-Variable -Name "NewSessionAndOriginalStatus" -Scope Global -Value $(
-        [pscustomobject][ordered]@{
+        [pscustomobject]@{
             ElevatedPSSession               = $ElevatedPSSession
             WSManAndRegistryChanges         = $SystemConfigScriptResult
             ConfigChangesFilePath           = $SudoSessionChangesPSObject
@@ -458,7 +392,7 @@ function New-SudoSession {
     # Cleanup 
     Remove-Item $SystemConfigScriptFilePath
     
-    if (!$($SuppressTimeWarning -or $KeepOpen)) {
+    if (!$($StartSudo -or $KeepOpen)) {
         Write-Warning "The New SudoSession named '$($ElevatedPSSession.Name)' with Id '$($ElevatedPSSession.Id)' will stay open for approximately 3 minutes!"
     }
 
@@ -469,33 +403,28 @@ function New-SudoSession {
 
 <#
     .SYNOPSIS
-        Removes a Sudo Session (i.e. elevated PSSession) for the current user in the current PowerShell Session and
-        and reverts any changes to WSMAN/CredSSP made by the New-SudoSession function.
+        Removes an Elevated (i.e. "Run As Administrator") PSSession for the current user in the current PowerShell Session and
+        and reverts any changes in WSMAN/WinRM and GPO configuration made by the companion New-SudoSessionTask function.
 
-        IMPORTANT NOTE: This function should only be necessary if the New-SudoSession function was used with the -KeepOpen switch!
-        It is meant to be used in the same PowerShell Session that the New-SudoSession function was used in.
+        This is a companion function with New-SudoSessionTask. If you DO NOT want to ensure that WinRM/WSMan and GPO configuration
+        is as it was prior to running New-SudoSessionTask, there is no reason to use this function. You can simply use...
+            Get-PSSession | Remove-PSession
+        ...like any other normal PSSession.
+
+        If you DO want to ensure that WinRM/WSMan and GPO configuration is as it was prior to running New-SudoSessionTask, then
+        use this function with its -RevertConfig switch and -OriginalConfigInfo parameter.
 
     .DESCRIPTION
-        See .SYNOPSIS
-
-    .PARAMETER SessionToRemove
-        This parameter is MANDATORY.
+        Removes an Elevated (i.e. "Run As Administrator") PSSession for the current user in the current PowerShell Session and
+        and reverts any changes in WSMAN/WinRM and GPO configuration made by the companion New-SudoSessionTask function.
         
-        This parameter takes a System.Management.Automation.Runspaces.PSSession object that you would like to remove.
-        
-        NOTE: The Name property of the PSSession object provided to this paramter should be "Sudo<UserName>". This
-        function is not meant to be used to close any other kind of PSSession.
+        This is a companion function with New-SudoSessionTask. If you DO NOT want to ensure that WinRM/WSMan and GPO configuration
+        is as it was prior to running New-SudoSessionTask, there is no reason to use this function. You can simply use...
+            Get-PSSession | Remove-PSession
+        ...like any other normal PSSession.
 
-    .PARAMETER OriginalConfigInfo
-        This parameter is MANDATORY.
-
-        This parameter defaults to the 'WSManAndRegistryChanges' property of the global variable created via the New-SudoSession
-        function called $global:NewSessionAndOriginalStatus, which is a PSCustomObject with the following properties:
-            [bool]WinRMStateChange
-            [bool]WSMANServerCredSSPStateChange
-            [bool]WSMANClientCredSSPStateChange
-            [System.Collections.ArrayList]RegistryKeyCreated
-            [System.Collections.ArrayList]RegistryKeyPropertiesCreated
+        If you DO want to ensure that WinRM/WSMan and GPO configuration is as it was prior to running New-SudoSessionTask, then
+        use this function with its -RevertConfig switch and -OriginalConfigInfo parameter.
 
     .PARAMETER UserName
         This is a string that represents a UserName with Administrator privileges. Defaults to current user.
@@ -510,12 +439,37 @@ function New-SudoSession {
     .PARAMETER Credentials
         This is a System.Management.Automation.PSCredential object used to create an elevated PSSession.
 
+    .PARAMETER OriginalConfigInfo
+        A PSCustomObject that can be found in the "WSManAndRegistryChanges" property of the PSCustomObject generated
+        by the New-SudoSessionTask function. The "WSManAndRegistryChanges" property is itself a PSCustomObject with the
+        following properties:
+            [bool]WinRMStateChange
+            [bool]WSMANServerCredSSPStateChange
+            [bool]WSMANClientCredSSPStateChange
+            [System.Collections.ArrayList]RegistryKeyCreated
+            [System.Collections.ArrayList]RegistryKeyPropertiesCreated
+
+    .PARAMETER SessionToRemove
+        A System.Management.Automation.Runspaces.PSSession object that you would like to remove. You can use the 
+        "ElevatedPSSession" property of the PSCustomObject generated by the New-SudoSessionTask function, or, you can simply
+        get whichever PSSession you would like to remove by doing the typical...
+            Get-PSSession -Name <Name>
+        
+        This parameter accepts value from the pipeline.
+
     .EXAMPLE
-        PS C:\Users\zeroadmin> $SudoSessionInfo = New-SudoSession -Credentials $MyCreds
-        PS C:\Users\zeroadmin> Remove-SudoSession -Credentials $MyCreds -OriginalConfigInfo $SudoSessionInfo.WSManAndRegistryChanges -SessionToRemove $SudoSessionInfo.ElevatedPSSession
+        Get-PSSession -Name <Name>
+        $ModuleToInstall = "PackageManagement"
+        $LatestVersion = $(Find-Module PackageManagement).Version
+        # PLEASE NOTE the use of single quotes in the below $InstallModuleExpression string
+        $InstallModuleExpression = 'Install-Module -Name $ModuleToInstall -RequiredVersion $LatestVersion'
+
+        $SudoSession = New-SudoSessionTask -Credentials $MyCreds -Expression $InstallModuleExpression
+
+        Remove-SudoSessionTask -Credentials $MyCreds -OriginalConfigInfo $SudoSession.WSManAndRegistryChanges -SessionToRemove $SudoSession.ElevatedPSSession
 
 #>
-function Remove-SudoSession {
+function Remove-SudoSessionTask {
     [CmdletBinding(DefaultParameterSetName='Supply UserName and Password')]
     Param(
         [Parameter(
@@ -550,13 +504,13 @@ function Remove-SudoSession {
     ##### BEGIN Variable/Parameter Transforms and PreRun Prep #####
 
     if (GetElevation) {
-        Write-Error "The current PowerShell Session is already being run with elevated permissions. There is no reason to use the Start-SudoSession function. Halting!"
+        Write-Error "The current PowerShell Session is already being run with elevated permissions. There is no reason to use the Start-SudoSessionTask function. Halting!"
         $global:FunctionResult = "1"
         return
     }
 
     if ($OriginalConfigInfo -eq $null) {
-        Write-Warning "Unable to determine the original configuration of WinRM/WSMan and AllowFreshCredentials Registry prior to using New-SudoSession. No configuration changes will be made/reverted."
+        Write-Warning "Unable to determine the original configuration of WinRM/WSMan and AllowFreshCredentials Registry prior to using New-SudoSessionTask. No configuration changes will be made/reverted."
         Write-Warning "The only action will be removing the Elevated PSSession specified by the -SessionToRemove parameter."
     }
 
@@ -616,7 +570,7 @@ function Remove-SudoSession {
         }
 
         try {
-            Restore-OriginalSystemConfig @RestoreOriginalSystemConfigSplatParams
+            Restore-OriginalSystemConfigTask @RestoreOriginalSystemConfigSplatParams
         }
         catch {
             Write-Error $_
@@ -639,90 +593,11 @@ function Remove-SudoSession {
 }
 
 
-<#
-    .SYNOPSIS
-        Restores WSMan and CredSSP settings to what they were prior to running the 'New-SudoSession' or 'Start-SudoSession'
-        functions.
-
-        IMPORTANT NOTE: You would use this function as opposed to the 'Remove-SudoSession' function under the following circumstance:
-            - You use the New-SudoSession with the -KeepOpen switch in a PowerShell Process we'll call 'A'
-            - PowerShell Process 'A' is killed/closed unexpectedly prior to the user running the Remove-SudoSession function
-            - PowerShell Process 'B' is started, the Sudo Module is imported, and this Restore-OriginalSystemConfig function
-            is used to revert WSMAN/CredSSP config changes made by the New-SudoSession function in PowerShell Process 'A'
-
-    .DESCRIPTION
-        See .SYNOPSIS
-
-    .PARAMETER ExistingSudoSession
-        Unless you are using the -ForceCredSSPReset switch, this parameter is MANDATORY.
-
-        This parameter takes a System.Management.Automation.Runspaces.PSSession object.
-
-    .PARAMETER SudoSessionChangesLogFilePath
-        Unless you are using the -ForceCredSSPReset switch, this parameter is MANDATORY.
-
-        This parameter taks a path to the .xml file generated by the New-SudoSession or Start-SudoSession functins
-        that logs exactly what changes to WSMan and CredSSP were made. The file name for this file defaults to the
-        format 'SudoSession_Config_Changes_<User>_<MMddyyyy>_<hhmmss>.xml'
-
-    .PARAMETER OriginalConfigInfo
-        This parameter is OPTIONAL.
-
-        This parameter takes a PSCustomObject that can be found in the "WSManAndRegistryChanges" property of the
-        PSCustomObject generated by the New-SudoSession function. The "WSManAndRegistryChanges" property is itself a
-        PSCustomObject with the following properties:
-            [bool]WinRMStateChange
-            [bool]WSMANServerCredSSPStateChange
-            [bool]WSMANClientCredSSPStateChange
-            [System.Collections.ArrayList]RegistryKeyCreated
-            [System.Collections.ArrayList]RegistryKeyPropertiesCreated
-
-    .PARAMETER UserName
-        This parameter is OPTIONAL.
-
-        This parameter takes a string and defaults to the Current User.
-
-        If you are running the Restore-OriginalSystemConfig function from a non-elevated PowerShell session, then credentials
-        with Adminstrator privileges must be provided in order to revert the WSMan and CredSSP changes that were made by the
-        New-SudoSession and/or the Start-SudoSession functions.
-
-    .PARAMETER Password
-        This parameter is OPTIONAL.
-
-        This parameter takes a SecureString. It should only be used if this function is being run from a non-elevated PowerShell
-        Session and if the -Credentials parameter is NOT used.
-
-        If you are running the Restore-OriginalSystemConfig function from a non-elevated PowerShell session, then credentials
-        with Adminstrator privileges must be provided in order to revert the WSMan and CredSSP changes that were made by the
-        New-SudoSession and/or the Start-SudoSession functions.
-
-    .PARAMETER Credentials
-        This parameter is OPTIONAL.
-
-        This parameter takes a System.Management.Automation.PSCredential. It should only be used if this function is being run from
-        a non-elevated PowerShell Session and if the -Password parameter is NOT used.
-
-        If you are running the Restore-OriginalSystemConfig function from a non-elevated PowerShell session, then credentials
-        with Adminstrator privileges must be provided in order to revert the WSMan and CredSSP changes that were made by the
-        New-SudoSession and/or the Start-SudoSession functions.
-
-    .PARAMETER ForceCredSSPReset
-        This parameter is OPTIONAL.
-
-        This parameter is a switch.
-
-        If used, all CredSSP settings will be set to disallow CredSSP authentication regardless of current system configuration state.
-
-    .EXAMPLE
-        PS C:\Users\zeroadmin> $SudoSessionInfo = New-SudoSession -Credentials $MyCreds
-        PS C:\Users\zeroadmin> Remove-SudoSession -Credentials $MyCreds -OriginalConfigInfo $SudoSessionInfo.WSManAndRegistryChanges -SessionToRemove $SudoSessionInfo.ElevatedPSSession
-
-#>
 # Just in case the PowerShell Session in which you originally created the SudoSession is killed/interrupted,
-# you can use this function to revert WSMAN/Registry changes that were made with the New-SudoSession function.
+# you can use this function to revert WSMAN/Registry changes that were made with the New-SudoSessionTask function.
 # Example:
-#   Restore-OriginalSystemConfig -SudoSessionChangesLogFilePath "$HOME\SudoSession_04182018\SudoSession_Config_Changes_04182018_082747.xml"
-function Restore-OriginalSystemConfig {
+#   Restore-OriginalSystemConfigTask -SudoSessionChangesLogFilePath "$HOME\SudoSession_04182018\SudoSession_Config_Changes_04182018_082747.xml"
+function Restore-OriginalSystemConfigTask {
     [CmdletBinding(DefaultParameterSetName='Supply UserName and Password')]
     Param(
         [Parameter(Mandatory=$False)]
@@ -1144,14 +1019,13 @@ function Restore-OriginalSystemConfig {
 
 <#
     .SYNOPSIS
-        Sudo for PowerShell! This function allows you to run a command, expression, or scriptblock as if you were
-        in an elevated (i.e. "Run as Administrator") context. If you supply credentials for a different user
-        that has Admin privileges, you can run the commands as that other user.
-
-        This Start-SudoSession's alias is 'sudo' so that you can run commands via:
-            sudo {Install-Module ...}
+        Sudo for PowerShell! This function allows you to run an expression as if you were in "Run as Administrator" mode.
 
     .DESCRIPTION
+        Using WSMan's CredSSP Authentication mechanism, this function allows you to run expressions in "Run as Administrator"
+        mode. This function is perfect for scripts/functions/modules that have one or two lines that absolutely need to be
+        Run As Administrator, but otherwise do not need elevated permissions.
+
         When used in a Non-Elevated PowerShell session, this function:
 
         1) Checks to make sure WinRM/WSMan is enabled and configured to allow CredSSP Authentication (if not then
@@ -1163,53 +1037,40 @@ function Restore-OriginalSystemConfig {
 
         3) Creates an Elevated PSSession using the New-PSSession cmdlet
 
-        4) Runs the command/expression/scriptblock in the Elevated PSSession
+        4) Runs the expression passed to the -Expression parameter in the Elevated PSSession
 
-        5) Removes the Elevated PSSession and reverts all changes made (if any) to Local Group Policy and WSMAN/CredSSP config.
+        5) Removes the Elevated PSSession and reverts all changes made (if any) to Local Group Policy and WSMAN/WinRM config.
 
     .PARAMETER UserName
-        This parameter takes a string that represents a UserName with Administrator privileges. Defaults to current user.
+        This is a string that represents a UserName with Administrator privileges. Defaults to current user.
 
         This parameter is mandatory if you do NOT use the -Credentials parameter.
 
     .PARAMETER Password
-        This parameter takes a SecureString that represents the password for -UserName.
+        This can be either a plaintext string or a secure string that represents the password for the -UserName.
 
         This parameter is mandatory if you do NOT use the -Credentials parameter.
 
     .PARAMETER Credentials
-        This parameter takes a System.Management.Automation.PSCredential object.
+        This is a System.Management.Automation.PSCredential object used to create an elevated PSSession.
 
-        This parameter is mandatory if you do NOT use the -Password parameter.
-
-    .PARAMETER ScriptBlock
-        This parameter is mandatory if you do NOT use the -StringExpression paramter.
-
-        This parameter takes a scriptblock that you would like to run in an elevated context.
-
-    .PARAMETER StringExpression
-        This parameter is mandatory is you do NOT use the -ScriptBlock parameter.
-
-        This parameter takes a string that represents a PowerShell expression that will be run in an elevated context.
-        Usage is similar to the -Command parameter of the Invoke-Expession cmdlet. See:
+    .PARAMETER Expression
+        This a *string* that represents a PowerShell expression that will be Run as Administrator. Usage is similar
+        to the -Command parameter of the Invoke-Expession cmdlet. See:
         https://msdn.microsoft.com/en-us/powershell/reference/5.1/microsoft.powershell.utility/invoke-expression
 
-    .PARAMETER ExistingSudoSession
-        This parameter is OPTIONAL, but is used by default if there is an existing Sudo Session available.
-
-        This parameter defaults to using the global variable $global:NewSessionAndOriginalStatus created by the
-        New-SudoSession function - specifically its 'ElevatedPSSession' property.
-
-        Command(s)/Expression/ScriptBlock will, by default, be run in this existing Sudo Session, UNLESS
-        new Credenitals are provided, in which case a new Sudo Session will be created and the Command(s)/Expression/ScriptBlock
-        will be run in that context.
-
     .EXAMPLE
-        PS C:\Users\zeroadmin> sudo {Install-Module -Name Assert}
-        Please enter the passworf for 'zero\zeroadmin': ***************
+        $ModuleToInstall = "PackageManagement"
+        $LatestVersion = $(Find-Module PackageManagement).Version
+        # PLEASE NOTE the use of single quotes in the below $InstallModuleExpression string
+        $InstallModuleExpression = 'Install-Module -Name $ModuleToInstall -RequiredVersion $LatestVersion'
+
+        Start-SudoSessionTask -Credentials $MyCreds -Expression $InstallModuleExpression
+
+    .OUTPUTS
 
 #>
-function Start-SudoSession {
+function Start-SudoSessionTask {
     [CmdletBinding(DefaultParameterSetName='Supply UserName and Password')]
     [Alias('sudo')]
     Param(
@@ -1247,7 +1108,7 @@ function Start-SudoSession {
     ##### BEGIN Variable/Parameter Transforms and PreRun Prep #####
     
     if (GetElevation) {
-        Write-Error "The current PowerShell Session is already being run with elevated permissions. There is no reason to use the Start-SudoSession function. Halting!"
+        Write-Error "The current PowerShell Session is already being run with elevated permissions. There is no reason to use the Start-SudoSessionTask function. Halting!"
         $global:FunctionResult = "1"
         return
     }
@@ -1337,8 +1198,8 @@ function Start-SudoSession {
     }
     else {
         try {
-            $SudoSessionInfo = New-SudoSession -Credentials $Credentials -SuppressTimeWarning -ErrorAction Stop
-            if (!$SudoSessionInfo) {throw "There was a problem with the New-SudoSession function! Halting!"}
+            $SudoSessionInfo = New-SudoSessionTask -Credentials $Credentials -StartSudo -ErrorAction Stop
+            if (!$SudoSessionInfo) {throw "There was a problem with the New-SudoSessionTask function! Halting!"}
         }
         catch {
             Write-Error $_
@@ -1378,7 +1239,7 @@ function Start-SudoSession {
 
     if (!$ExistingSudoSession) {
         # Remove the SudoSession
-        $null = Remove-SudoSession -SessionToRemove $ElevatedPSSession
+        $null = Remove-SudoSessionTask -SessionToRemove $ElevatedPSSession
     }
 
     ##### END Main Body #####
@@ -1386,11 +1247,14 @@ function Start-SudoSession {
 
 
 
+
+
+
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUm5xR2ozfI9eFVxc9XU54i51I
-# s06gggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQU4Di3p0ER9icENHW4NO8hpwjf
+# exOgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -1447,11 +1311,11 @@ function Start-SudoSession {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFNPpXHkDMi35cHkY
-# ZUZczeGxX81wMA0GCSqGSIb3DQEBAQUABIIBACuAuuPXzZD4SweWKGczQfCor4cL
-# T46aFnMjIZFplMO1jR3lrpjLh/JCsaQAFzr9sI2TUN0eetLrpj2RS4XtKsTKyBgI
-# SwiWkiuypMc0uZ2TuWSDXicPKE7PINX6CiFHM8vW6wAAK4N5XF0HmDQK8zUzx0bg
-# Czh6bKwqIVL/0Q1oyoB6MhSannpXBJ9wOYFs6wjXkuOJwfcCmp3Dh9s3uv/OpMPj
-# 1mnu8ySGD/THqPsovNLjHZFMW/5mmHoOIX0rRa/vG1pNEuASbc7JL8EbuWEIYB2x
-# Xy5EYnU1XTT4OfWJ+GxH0U8pyYMCcJNc/OAtPLq8NNOrc0CPJrZnxUbMzfU=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFIfPLP8gX6yvItUx
+# CMzBWxJOpAwAMA0GCSqGSIb3DQEBAQUABIIBACBqMLC1OMPwA1kbGiUtLja8c779
+# H6t2X0pxoPLqxw4Y26Q9qnVRBD/ajf4WbXhUyaGl6HNhQvq9yf2yt0j40T4qxvLV
+# 6tUH5waei2kf6LswfVqnIEwDZynZ2xQ0AFRn6HYCYOxD6m+jyhDVILDd9yM+WtEG
+# JSAF0tzd3obRQXXzokwPCPVldTOGhhn4jbNsIqi4p3CmvcYdVyU2oblg5q/8og6A
+# 0XsdNhquPPydiw/jFwJrUcFJYmVXXXr7Jtugi2DvOeQWRf/zvepmR/fCRsVGXvVR
+# zmS3wEhLLwC0QxcC1Hc3BScHpIWM6BLltu5XS4OMTaw29L6kqIJIf5J19Wc=
 # SIG # End signature block

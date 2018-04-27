@@ -1,79 +1,77 @@
-﻿# Generic module deployment.
-#
-# ASSUMPTIONS:
-#
-# * folder structure either like:
-#
-#   - RepoFolder
-#     - This PSDeploy file
-#     - ModuleName
-#       - ModuleName.psd1
-#
-#   OR the less preferable:
-#   - RepoFolder
-#     - RepoFolder.psd1
-#
-# * Nuget key in $ENV:NugetApiKey
-#
-# * Set-BuildEnvironment from BuildHelpers module has populated ENV:BHModulePath and related variables
-
-# Publish to gallery with a few restrictions
-if(
-    $env:BHModulePath -and
-    $env:BHBuildSystem -ne 'Unknown' -and
-    $env:BHBranchName -eq "master" -and
-    $env:BHCommitMessage -match '!deploy'
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory=$False)]
+    [System.Collections.Hashtable]$TestResources
 )
-{
-    Deploy Module {
-        By PSGalleryModule {
-            FromSource $ENV:BHModulePath
-            To PSGallery
-            WithOptions @{
-                ApiKey = $ENV:NugetApiKey
-            }
-        }
+
+# NOTE: `Set-BuildEnvironment -Force -Path $PSScriptRoot` from build.ps1 makes the following $env: available:
+<#
+    $env:BHBuildSystem = "Unknown"
+    $env:BHProjectPath = "U:\powershell\ProjectRepos\Sudo"
+    $env:BHBranchName = "master"
+    $env:BHCommitMessage = "!deploy"
+    $env:BHBuildNumber = 0
+    $env:BHProjectName = "Sudo"
+    $env:BHPSModuleManifest = "U:\powershell\ProjectRepos\Sudo\Sudo\Sudo.psd1"
+    $env:BHModulePath = "U:\powershell\ProjectRepos\Sudo\Sudo"
+    $env:BHBuildOutput = "U:\powershell\ProjectRepos\Sudo\BuildOutput"
+#>
+
+# Verbose output for non-master builds on appveyor
+# Handy for troubleshooting.
+# Splat @Verbose against commands as needed (here or in pester tests)
+$Verbose = @{}
+if($env:BHBranchName -notlike "master" -or $env:BHCommitMessage -match "!verbose") {
+    $Verbose.add("Verbose",$True)
+}
+
+# Make sure the Module is not already loaded
+if ([bool]$(Get-Module -Name $env:BHProjectName -ErrorAction SilentlyContinue)) {
+    Remove-Module $env:BHProjectName -Force
+}
+$global:SudoCredentials = $null
+$global:NewSessionAndOriginalStatus = $null
+
+if ([bool]$(Get-Module -Name SudoTasks)) {
+    Remove-Module -Name SudoTasks -Force
+}
+
+Describe -Name "General Project Validation: $env:BHProjectName" -Tag 'Validation' -Fixture {
+    $Scripts = Get-ChildItem $env:BHProjectPath -Include *.ps1,*.psm1,*.psd1 -Recurse
+
+    # TestCases are splatted to the script so we need hashtables
+    $TestCasesHashTable = $Scripts | foreach {@{file=$_}}         
+    It "Script <file> should be valid powershell" -TestCases $TestCasesHashTable {
+        param($file)
+
+        $file.fullname | Should Exist
+
+        $contents = Get-Content -Path $file.fullname -ErrorAction Stop
+        $errors = $null
+        $null = [System.Management.Automation.PSParser]::Tokenize($contents, [ref]$errors)
+        $errors.Count | Should Be 0
+    }
+
+    It "Module '$env:BHProjectName' Should Load" -Test {
+        {Import-Module $env:BHPSModuleManifest -Force} | Should Not Throw
+    }
+
+    It "Module '$env:BHProjectName' Public and Not Private Functions Are Available" {
+        $Module = Get-Module $env:BHProjectName
+        $Module.Name -eq $env:BHProjectName | Should Be $True
+        $Commands = $Module.ExportedCommands.Keys
+        $Commands -contains 'GetElevation' | Should Be $False
+        $Commands -contains 'New-SudoSession' | Should Be $True
+        $Commands -contains 'Start-SudoSession' | Should Be $True
+        $Commands -contains 'Remove-SudoSession' | Should Be $True
+        $Commands -contains 'Restore-OriginalSystemConfig' | Should Be $True
+    }
+
+    It "Module '$env:BHProjectName' Private Functions Are Available in Internal Scope" {
+        $Module = Get-Module $env:BHProjectName
+        [bool]$Module.Invoke({Get-Item function:GetElevation}) | Should Be $True
     }
 }
-else
-{
-    "Skipping deployment: To deploy, ensure that...`n" +
-    "`t* You are in a known build system (Current: $ENV:BHBuildSystem)`n" +
-    "`t* You are committing to the master branch (Current: $ENV:BHBranchName) `n" +
-    "`t* Your commit message includes !deploy (Current: $ENV:BHCommitMessage)" |
-        Write-Host
-}
-
-# Publish to AppVeyor if we're in AppVeyor
-if(
-    $env:BHModulePath -and
-    $env:BHBuildSystem -eq 'AppVeyor'
-   )
-{
-    Deploy DeveloperBuild {
-        By AppVeyorModule {
-            FromSource $ENV:BHModulePath
-            To AppVeyor
-            WithOptions @{
-                Version = $env:APPVEYOR_BUILD_VERSION
-            }
-        }
-    }
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -82,8 +80,8 @@ if(
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUP/aG8+l5aF/d5GqS2tsAyHVJ
-# 6VGgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUQxYrIEEhyWqG/3fe1REJKtR8
+# Kfmgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -140,11 +138,11 @@ if(
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFKVqRzd+sV8Q6IHi
-# q4IvO7eO8VZWMA0GCSqGSIb3DQEBAQUABIIBAKp0tinhUdVUmXwiVlW27TpMy4mI
-# dSSPZsz+iBsKcszI1faVGGdCMwijMyiFA+HUcZfU15VxnysfFEoF2ybO6s/axbTd
-# zpmMBRs3oIbFdPJ7jmmTKQgJDKWGjv3hsRppvifRKSMRnOBK+ydMKijz5Ap/7N4t
-# KmsT1H9cotOCrXjxltIxUeVU6Y2HMeYoQH8KDR/TekjE1PnxyD+G7SjaHW7EZ/YI
-# L5fhRkxCXFaprlIkQQpjggHeEv3TS69/M5HwZ9+YdBi/3CPe4IDp4dK5qkRzEevm
-# GjuZyc4GG76C/EdpnT20BdBTOSppwFS0XikGMbm8U16a1sJQmKnBc1Ii9EU=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFAuo6tlpw4bsAGNi
+# jf4K2bC3GsBiMA0GCSqGSIb3DQEBAQUABIIBAFZO/Jffp7I4y6nTCKGFWwr9SJIN
+# sTFCfdg27MsIHCb5fQb2VMghOAY4q4I266am6wwcLUMEi+fPiGLMbWNfQ7K413Ff
+# hqg2csM9jpu6G+orbrLbckBLIgdWHATtFaQZ9KNX/4mBlqjg4KNYBjicxbL0sZpN
+# rAzQ7LmXceQABKEXDSG+ZVJeXzfrltq77go43q3eBsteiwL32yEnavFGRxWsw3tm
+# xvCBRmi9cxeMwMu06uf5abqAjyEB4dEWvFV7s737ST6rkdf74hqmok76gPDXxlGi
+# kFHE/5VAwwEeUo/eHvgc9z7Jv2gXsQOP91hMkND7izvHsOEVqFI/AalEgRw=
 # SIG # End signature block

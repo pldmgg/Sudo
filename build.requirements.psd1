@@ -1,30 +1,36 @@
-function GetElevation {
-    if ($PSVersionTable.PSEdition -eq "Desktop" -or $PSVersionTable.Platform -eq "Win32NT" -or $PSVersionTable.PSVersion.Major -le 5) {
-        [System.Security.Principal.WindowsPrincipal]$currentPrincipal = New-Object System.Security.Principal.WindowsPrincipal(
-            [System.Security.Principal.WindowsIdentity]::GetCurrent()
-        )
-
-        [System.Security.Principal.WindowsBuiltInRole]$administratorsRole = [System.Security.Principal.WindowsBuiltInRole]::Administrator
-
-        if($currentPrincipal.IsInRole($administratorsRole)) {
-            return $true
-        }
-        else {
-            return $false
-        }
+@{
+    # Some defaults for all dependencies
+    PSDependOptions = @{
+        Target = '$ENV:USERPROFILE\Documents\WindowsPowerShell\Modules'
+        AddToPath = $True
     }
-    
-    if ($PSVersionTable.Platform -eq "Unix") {
-        if ($(whoami) -eq "root") {
-            return $true
-        }
-        else {
-            return $false
-        }
+
+    # Grab some modules without depending on PowerShellGet
+    'psake' = @{
+        DependencyType  = 'PSGalleryNuget'
+        Version         = 'Latest'
+    }
+    'PSDeploy' = @{
+        DependencyType  = 'PSGalleryNuget'
+        Version         = 'Latest'
+    }
+    'BuildHelpers' = @{
+        DependencyType  = 'PSGalleryNuget'
+        Version         = 'Latest'
+    }
+    'Pester' = @{
+        DependencyType  = 'PSGalleryNuget'
+        Version         = 'Latest'
+    }
+    'PSScriptAnalyzer' = @{
+        DependencyType  = 'PSGalleryNuget'
+        Version         = 'Latest'
+    }
+    'Assert' = @{
+        DependencyType  = 'PSGalleryNuget'
+        Version         = 'Latest'
     }
 }
-
-
 
 
 
@@ -33,8 +39,8 @@ function GetElevation {
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQU4Vq4eI5G4bHaGLlH9fbCKfaE
-# p7qgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUS+GZsvT5vF0dkXrl+QdKucMT
+# RdOgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -91,11 +97,11 @@ function GetElevation {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFF1VSxL6ATy9Op0b
-# CWOQi8Bw4DXDMA0GCSqGSIb3DQEBAQUABIIBAD+3eGj3o6EEhyOyVubXGLYbRk9e
-# Gu4oVO4qV4qGe8xRGKJUE+6vgfaGaWDtbCa0oUBc6p5phcykJpgGm1yC0DC39eWS
-# jf+SZgYyWVyqa92EzEdtFm3JQpOZfPSh7AQJAfx4Ib9jnmWh4l9lA6cqMKV3+KJ+
-# ZLQ42U/NZAxJHLjmYlqG3AFbbFEnIQhyKKCRLT265rUpzRoVTzQ6krj4Y0T307qV
-# PTJVxmHXdc66E+aKjet+nRKtKVctDkKLFElaVhQQeY2VSw+S83V2fW9Q6pUEoi0V
-# CKEpTW84/dxTCZxc0CX+fZV7+IOUSgVS0fzgAeqp9onkjAFVuSGuWy4c6K4=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFGb1q5ZLjsUrN4I6
+# 2HgB9P89TbhbMA0GCSqGSIb3DQEBAQUABIIBAF/FQ/pdveRi2YbwMNisjmXBvi3H
+# fkWMmRNgPpSUvGdOMLN71wE/2EDL45jcgd2XJU/HAqrMv9+QkFXjLihDZzEQZh0/
+# 2lPO7kTkPOxpR8BYt6PL0iuszFNmB4K500oLXwWAQnmKKw+IvhkUOf0Uh5VCVL5y
+# z/edszm03wnszk60QoL6TCj+KOW6j09+ZspcGZ1YHTJfrwPvtkeZ4FDDHIcTSmFr
+# 3XnpnkygsIchP+ehUemRzt0dBeK6UkUEcGmmP1OIaasnpSKlMMEP+57xEevFIzW6
+# KTzgsijAjf2R8swbf8f6OHxcaoZjir3hbT78BHmDFk2vkRpz3N5Zj5tgar8=
 # SIG # End signature block

@@ -1,25 +1,55 @@
-function GetElevation {
-    if ($PSVersionTable.PSEdition -eq "Desktop" -or $PSVersionTable.Platform -eq "Win32NT" -or $PSVersionTable.PSVersion.Major -le 5) {
-        [System.Security.Principal.WindowsPrincipal]$currentPrincipal = New-Object System.Security.Principal.WindowsPrincipal(
-            [System.Security.Principal.WindowsIdentity]::GetCurrent()
-        )
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory=$False)]
+    [System.Collections.Hashtable]$TestResources
+)
 
-        [System.Security.Principal.WindowsBuiltInRole]$administratorsRole = [System.Security.Principal.WindowsBuiltInRole]::Administrator
+# NOTE: `Set-BuildEnvironment -Force -Path $PSScriptRoot` from build.ps1 makes the following $env: available:
+<#
+    $env:BHBuildSystem = "Unknown"
+    $env:BHProjectPath = "U:\powershell\ProjectRepos\Sudo"
+    $env:BHBranchName = "master"
+    $env:BHCommitMessage = "!deploy"
+    $env:BHBuildNumber = 0
+    $env:BHProjectName = "Sudo"
+    $env:BHPSModuleManifest = "U:\powershell\ProjectRepos\Sudo\Sudo\Sudo.psd1"
+    $env:BHModulePath = "U:\powershell\ProjectRepos\Sudo\Sudo"
+    $env:BHBuildOutput = "U:\powershell\ProjectRepos\Sudo\BuildOutput"
+#>
 
-        if($currentPrincipal.IsInRole($administratorsRole)) {
-            return $true
-        }
-        else {
-            return $false
+Set-StrictMode -Version latest
+
+# Make sure MetaFixers.psm1 is loaded - it contains Get-TextFilesList
+Import-Module -Name "$PSScriptRoot\MetaFixers.psm1" -Verbose:$false -Force
+
+Describe 'Text files formatting' {
+
+    $allTextFiles = Get-TextFilesList $env:BHProjectPath
+
+    Context 'Files encoding' {
+        It "Doesn't use Unicode encoding" {
+            $unicodeFilesCount = 0
+            $allTextFiles | Foreach-Object {
+                if (Test-FileInUnicode $_) {
+                    $unicodeFilesCount += 1
+                    Write-Warning "File $($_.FullName) contains 0x00 bytes. It's probably uses Unicode and need to be converted to UTF-8. Use Fixer 'Get-UnicodeFilesList `$pwd | ConvertTo-UTF8'."
+                }
+            }
+            $unicodeFilesCount | Should Be 0
         }
     }
-    
-    if ($PSVersionTable.Platform -eq "Unix") {
-        if ($(whoami) -eq "root") {
-            return $true
-        }
-        else {
-            return $false
+
+    Context 'Indentations' {
+        It 'Uses spaces for indentation, not tabs' {
+            $totalTabsCount = 0
+            $allTextFiles | Foreach-Object {
+                $fileName = $_.FullName
+                (Get-Content $_.FullName -Raw) | Select-String "`t" | Foreach-Object {
+                    Write-Warning "There are tab in $fileName. Use Fixer 'Get-TextFilesList `$pwd | ConvertTo-SpaceIndentation'."
+                    $totalTabsCount++
+                }
+            }
+            $totalTabsCount | Should Be 0
         }
     }
 }
@@ -28,13 +58,11 @@ function GetElevation {
 
 
 
-
-
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQU4Vq4eI5G4bHaGLlH9fbCKfaE
-# p7qgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUjFfHqhFtMqBIgZxS1YnZ66XX
+# IBmgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -91,11 +119,11 @@ function GetElevation {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFF1VSxL6ATy9Op0b
-# CWOQi8Bw4DXDMA0GCSqGSIb3DQEBAQUABIIBAD+3eGj3o6EEhyOyVubXGLYbRk9e
-# Gu4oVO4qV4qGe8xRGKJUE+6vgfaGaWDtbCa0oUBc6p5phcykJpgGm1yC0DC39eWS
-# jf+SZgYyWVyqa92EzEdtFm3JQpOZfPSh7AQJAfx4Ib9jnmWh4l9lA6cqMKV3+KJ+
-# ZLQ42U/NZAxJHLjmYlqG3AFbbFEnIQhyKKCRLT265rUpzRoVTzQ6krj4Y0T307qV
-# PTJVxmHXdc66E+aKjet+nRKtKVctDkKLFElaVhQQeY2VSw+S83V2fW9Q6pUEoi0V
-# CKEpTW84/dxTCZxc0CX+fZV7+IOUSgVS0fzgAeqp9onkjAFVuSGuWy4c6K4=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFHBFbnfhOl3gtOCy
+# C39hkLJc0xmFMA0GCSqGSIb3DQEBAQUABIIBACAFqKTAVk4HLHyORFcAgplbMKpW
+# xM7W4a+JB9co/CiTKo2oT+4QbR9x/ieGT67yCr56eqJKd+KLcCt2kvICeb3+NEP4
+# kSD2CR4Cl3hp8A+TtoT9BSqPBXtNUv/rILI8vqenpcIPuxhdWjC194VYhjJV6QzO
+# ZhWz+Mp8r6N3bJk3LH+lXNcSR9ph+ybPpvArLshL8fEFkyfUjLu5lvYHtgc7/vW3
+# 1iUarhTKBK7GnBLG1RRbk2mbl7KEmaX+QnpFtsvFkSdITBytU9ntYM9Otv/8rHMs
+# OM5ws533/jZYJ4HuRk63eXAIh27eDDwLsu6lJL0ksv08tNz/EsEwHs195Ks=
 # SIG # End signature block

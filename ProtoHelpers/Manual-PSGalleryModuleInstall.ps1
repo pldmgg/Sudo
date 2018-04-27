@@ -1,30 +1,55 @@
-function GetElevation {
-    if ($PSVersionTable.PSEdition -eq "Desktop" -or $PSVersionTable.Platform -eq "Win32NT" -or $PSVersionTable.PSVersion.Major -le 5) {
-        [System.Security.Principal.WindowsPrincipal]$currentPrincipal = New-Object System.Security.Principal.WindowsPrincipal(
-            [System.Security.Principal.WindowsIdentity]::GetCurrent()
-        )
+function Manual-PSGalleryModuleInstall {
+    [CmdletBinding()]
+    Param (
+        [Parameter(Mandatory=$True)]
+        [string]$ModuleName,
 
-        [System.Security.Principal.WindowsBuiltInRole]$administratorsRole = [System.Security.Principal.WindowsBuiltInRole]::Administrator
+        [Parameter(Mandatory=$False)]
+        [string]$DownloadDirectory
+    )
 
-        if($currentPrincipal.IsInRole($administratorsRole)) {
-            return $true
-        }
-        else {
-            return $false
-        }
+    if (!$DownloadDirectory) {
+        $DownloadDirectory = $(Get-Location).Path
+    }
+
+    if (!$(Test-Path $DownloadDirectory)) {
+        Write-Error "The path $DownloadDirectory was not found! Halting!"
+        $global:FunctionResult = "1"
+        return
+    }
+
+    if (![bool]$($($env:PSModulePath -split ";") -match [regex]::Escape("$HOME\Documents\WindowsPowerShell\Modules"))) {
+        $env:PSModulePath = "$HOME\Documents\WindowsPowerShell\Modules;$env:PSModulePath"
+    }
+    if (!$(Test-Path "$HOME\Documents\WindowsPowerShell\Modules")) {
+        $null = New-Item -ItemType Directory "$HOME\Documents\WindowsPowerShell\Modules" -Force
+    }
+
+    $searchUrl = "https://www.powershellgallery.com/api/v2/Packages?`$filter=Id eq '$ModuleName' and IsLatestVersion"
+    $ModuleInfo = Invoke-RestMethod $searchUrl
+    if (!$ModuleInfo) {
+        Write-Error "Unable to find Module Named $ModuleName! Halting!"
+        $global:FunctionResult = "1"
+        return
     }
     
-    if ($PSVersionTable.Platform -eq "Unix") {
-        if ($(whoami) -eq "root") {
-            return $true
+    $OutFilePath = Join-Path $DownloadDirectory $($ModuleInfo.title.'#text' + $ModuleInfo.properties.version + '.zip')
+    if (Test-Path $OutFilePath) {Remove-Item $OutFilePath -Force}
+    Invoke-WebRequest $ModuleInfo.Content.src -OutFile $OutFilePath
+    if (Test-Path "$DownloadDirectory\$ModuleName") {Remove-Item "$DownloadDirectory\$ModuleName" -Recurse -Force}
+    Expand-Archive $OutFilePath -DestinationPath "$DownloadDirectory\$ModuleName"
+
+    if ($DownloadDirectory -ne "$HOME\Documents\WindowsPowerShell\Modules") {
+        if (Test-Path "$HOME\Documents\WindowsPowerShell\Modules\$ModuleName") {
+            Remove-Item "$HOME\Documents\WindowsPowerShell\Modules\$ModuleName" -Recurse -Force
         }
-        else {
-            return $false
-        }
+        Copy-Item -Path "$DownloadDirectory\$ModuleName" -Recurse -Destination "$HOME\Documents\WindowsPowerShell\Modules"
+
+        Remove-Item "$DownloadDirectory\$ModuleName" -Recurse -Force
     }
+
+    Remove-Item $OutFilePath -Force
 }
-
-
 
 
 
@@ -33,8 +58,8 @@ function GetElevation {
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQU4Vq4eI5G4bHaGLlH9fbCKfaE
-# p7qgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUmzPEeRfEnPje2uPVQBxohJWF
+# jjigggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -91,11 +116,11 @@ function GetElevation {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFF1VSxL6ATy9Op0b
-# CWOQi8Bw4DXDMA0GCSqGSIb3DQEBAQUABIIBAD+3eGj3o6EEhyOyVubXGLYbRk9e
-# Gu4oVO4qV4qGe8xRGKJUE+6vgfaGaWDtbCa0oUBc6p5phcykJpgGm1yC0DC39eWS
-# jf+SZgYyWVyqa92EzEdtFm3JQpOZfPSh7AQJAfx4Ib9jnmWh4l9lA6cqMKV3+KJ+
-# ZLQ42U/NZAxJHLjmYlqG3AFbbFEnIQhyKKCRLT265rUpzRoVTzQ6krj4Y0T307qV
-# PTJVxmHXdc66E+aKjet+nRKtKVctDkKLFElaVhQQeY2VSw+S83V2fW9Q6pUEoi0V
-# CKEpTW84/dxTCZxc0CX+fZV7+IOUSgVS0fzgAeqp9onkjAFVuSGuWy4c6K4=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFNN+roB+YDlUm/0f
+# ey/EoFjKRlawMA0GCSqGSIb3DQEBAQUABIIBAIP7sstZdbClBO/lYH6+rxgvnZcw
+# m8ssHtj1n26UD73U0ehj/CWAqlXtFcrLg7CGJnmNBM4TwCyhPXBNOy/iAVRdIC3+
+# xuG4EO0oLCBI5meoCaAbZNuzPyrthxPgu5+Mnaz5iiSmynTuHyPXE+fYOKrcRza6
+# 11siv+xpM/vLzTHUL5p8NYOXgziy0njqroiF5JhCbVE8ncaek3pJbPd8I+7GvnkG
+# silu5dwxzkK457KqbEJzSV+LdRoFUiwoMVthY0Ex/hApId6bQGt8iS9+8UfWSzXI
+# m7/VCu6ENhYu66zbrdpGsOVmlYSI7QZqAQ7EnllDL9LRnYor2dFyF53F0A0=
 # SIG # End signature block

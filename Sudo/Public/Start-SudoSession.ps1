@@ -1,12 +1,13 @@
 <#
     .SYNOPSIS
-        Sudo for PowerShell! This function allows you to run an expression as if you were in "Run as Administrator" mode.
+        Sudo for PowerShell! This function allows you to run a command, expression, or scriptblock as if you were
+        in an elevated (i.e. "Run as Administrator") context. If you supply credentials for a different user
+        that has Admin privileges, you can run the commands as that other user.
+
+        This Start-SudoSession's alias is 'sudo' so that you can run commands via:
+            sudo {Install-Module ...}
 
     .DESCRIPTION
-        Using WSMan's CredSSP Authentication mechanism, this function allows you to run expressions in "Run as Administrator"
-        mode. This function is perfect for scripts/functions/modules that have one or two lines that absolutely need to be
-        Run As Administrator, but otherwise do not need elevated permissions.
-
         When used in a Non-Elevated PowerShell session, this function:
 
         1) Checks to make sure WinRM/WSMan is enabled and configured to allow CredSSP Authentication (if not then
@@ -18,37 +19,50 @@
 
         3) Creates an Elevated PSSession using the New-PSSession cmdlet
 
-        4) Runs the expression passed to the -Expression parameter in the Elevated PSSession
+        4) Runs the command/expression/scriptblock in the Elevated PSSession
 
-        5) Removes the Elevated PSSession and reverts all changes made (if any) to Local Group Policy and WSMAN/WinRM config.
+        5) Removes the Elevated PSSession and reverts all changes made (if any) to Local Group Policy and WSMAN/CredSSP config.
 
     .PARAMETER UserName
-        This is a string that represents a UserName with Administrator privileges. Defaults to current user.
+        This parameter takes a string that represents a UserName with Administrator privileges. Defaults to current user.
 
         This parameter is mandatory if you do NOT use the -Credentials parameter.
 
     .PARAMETER Password
-        This can be either a plaintext string or a secure string that represents the password for the -UserName.
+        This parameter takes a SecureString that represents the password for -UserName.
 
         This parameter is mandatory if you do NOT use the -Credentials parameter.
 
     .PARAMETER Credentials
-        This is a System.Management.Automation.PSCredential object used to create an elevated PSSession.
+        This parameter takes a System.Management.Automation.PSCredential object.
 
-    .PARAMETER Expression
-        This a *string* that represents a PowerShell expression that will be Run as Administrator. Usage is similar
-        to the -Command parameter of the Invoke-Expession cmdlet. See:
+        This parameter is mandatory if you do NOT use the -Password parameter.
+
+    .PARAMETER ScriptBlock
+        This parameter is mandatory if you do NOT use the -StringExpression paramter.
+
+        This parameter takes a scriptblock that you would like to run in an elevated context.
+
+    .PARAMETER StringExpression
+        This parameter is mandatory is you do NOT use the -ScriptBlock parameter.
+
+        This parameter takes a string that represents a PowerShell expression that will be run in an elevated context.
+        Usage is similar to the -Command parameter of the Invoke-Expession cmdlet. See:
         https://msdn.microsoft.com/en-us/powershell/reference/5.1/microsoft.powershell.utility/invoke-expression
 
+    .PARAMETER ExistingSudoSession
+        This parameter is OPTIONAL, but is used by default if there is an existing Sudo Session available.
+
+        This parameter defaults to using the global variable $global:NewSessionAndOriginalStatus created by the
+        New-SudoSession function - specifically its 'ElevatedPSSession' property.
+
+        Command(s)/Expression/ScriptBlock will, by default, be run in this existing Sudo Session, UNLESS
+        new Credenitals are provided, in which case a new Sudo Session will be created and the Command(s)/Expression/ScriptBlock
+        will be run in that context.
+
     .EXAMPLE
-        $ModuleToInstall = "PackageManagement"
-        $LatestVersion = $(Find-Module PackageManagement).Version
-        # PLEASE NOTE the use of single quotes in the below $InstallModuleExpression string
-        $InstallModuleExpression = 'Install-Module -Name $ModuleToInstall -RequiredVersion $LatestVersion'
-
-        Start-SudoSession -Credentials $MyCreds -Expression $InstallModuleExpression
-
-    .OUTPUTS
+        PS C:\Users\zeroadmin> sudo {Install-Module -Name Assert}
+        Please enter the passworf for 'zero\zeroadmin': ***************
 
 #>
 function Start-SudoSession {
@@ -179,7 +193,7 @@ function Start-SudoSession {
     }
     else {
         try {
-            $SudoSessionInfo = New-SudoSession -Credentials $Credentials -StartSudo -ErrorAction Stop
+            $SudoSessionInfo = New-SudoSession -Credentials $Credentials -SuppressTimeWarning -ErrorAction Stop
             if (!$SudoSessionInfo) {throw "There was a problem with the New-SudoSession function! Halting!"}
         }
         catch {
@@ -231,26 +245,11 @@ function Start-SudoSession {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUDpsWCPOamTBjBZP+m1uIqU7T
-# pHSgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQU06G5EzBeTbKKIry4VqBZJJ0x
+# pQWgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -307,11 +306,11 @@ function Start-SudoSession {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFCbTXbFuHU004S95
-# v7LmaVwtigI8MA0GCSqGSIb3DQEBAQUABIIBAEszgfkaVDeUff1ChZ2PdF7bJlzr
-# wYKkMaWHQ7gLPzbPSPtjLG3PTzmFOTRufb/qlvJjYn+lvcJkTSkSqY0pkje+mIlJ
-# +PUeSHUgtMmwI1IN8qq4l9zD8hlaK3uVq01E6fOQzT9mKr9x+1iwplj0lA1bgmLA
-# YxhARYD3sFVngqFGf6kReUhUiOR942IOfG5fGrRx4QBs3jDz7ZmcCgjJ0JN2mI5L
-# qzBl8GYz6sgeT0q4aE+HBOG9fqNPZnIHtwbDOM4w5rt78+tqtQ/jfqM354Z57f5x
-# OFg9ROwa21JPEf1sPLP1VndR+sBfuBHNrot1wTl6Rs8fjteXboyrviTsft4=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFIjGlIy7fIe3s0tO
+# Rv8CWmg5RSd+MA0GCSqGSIb3DQEBAQUABIIBAI1U7OYQMPeRd3NjwoUUcxqPGvz7
+# IDAW2gIQLIUsGIzqPT7ZUy6URRzYtm9ZXh/wPLMetfyu4K6TmYHLtDLjDpjjL3Pc
+# 8MYOVNfJ2j1NYK6f8vrPikGNZKhpiGeC5Yruq0GHdvmoiVkVbXqpR5R2F/38WQdJ
+# XKgrkIhsfsFMOw/mNTrASXe2ldEgESmLFfO7o16p/A1hwfatyMQ/t//e9tJ2CTR/
+# jjb6RHJpthZEeLzw4TyHU8MDZcI3LEBFDWZnf9tsRO9Qv4HKfA+Zc0W28jIkKlls
+# 7UBRy7Ml2ahn7hKWW5kVoBMRBqyl8sLKdSlxWmttssE+xUDLOE8lx96SM/Y=
 # SIG # End signature block

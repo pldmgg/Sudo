@@ -1,37 +1,40 @@
-﻿param(
-    [string]$CertFileForSignature,
-    [System.Security.Cryptography.X509Certificates.X509Certificate2]$Cert
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory=$False)]
+    [System.Security.Cryptography.X509Certificates.X509Certificate2]$Cert,
+
+    [Parameter(Mandatory=$False)]
+    [System.Collections.Hashtable]$TestResources
 )
 
-if ($CertFileForSignature -and !$Cert) {
-    if (!$(Test-Path $CertFileForSignature)) {
-        Write-Error "Unable to find the Certificate specified to be used for Code Signing! Halting!"
-        $global:FunctionResult = "1"
-        return
-    }
+# NOTE: `Set-BuildEnvironment -Force -Path $PSScriptRoot` from build.ps1 makes the following $env: available:
+<#
+    $env:BHBuildSystem = "Unknown"
+    $env:BHProjectPath = "U:\powershell\ProjectRepos\Sudo"
+    $env:BHBranchName = "master"
+    $env:BHCommitMessage = "!deploy"
+    $env:BHBuildNumber = 0
+    $env:BHProjectName = "Sudo"
+    $env:BHPSModuleManifest = "U:\powershell\ProjectRepos\Sudo\Sudo\Sudo.psd1"
+    $env:BHModulePath = "U:\powershell\ProjectRepos\Sudo\Sudo"
+    $env:BHBuildOutput = "U:\powershell\ProjectRepos\Sudo\BuildOutput"
+#>
 
-    $Cert = Get-PfxCertificate $CertFileForSignature
-
-    if (!$Cert) {
-        Write-Error "The Get-PfxCertificate function failed! Check your password for the .pfx file. Halting!"
-        $global:FunctionResult = "1"
-        return
+# NOTE: If -TestResources was used, the folloqing resources should be available
+<#
+    $TestResources = @{
+        UserName        = $UserName
+        SimpleUserName  = $SimpleUserName
+        Password        = $Password
+        Creds           = $Creds
     }
-}
+#>
 
 # PSake makes variables declared here available in other scriptblocks
 # Init some things
 Properties {
-    # Find the build folder based on build system
-        $ProjectRoot = $ENV:BHProjectPath
-        if(-not $ProjectRoot)
-        {
-            $ProjectRoot = Resolve-Path "$PSScriptRoot\.."
-        }
-        $ModuleRoot = Split-Path $(Resolve-Path "$ProjectRoot\*\*.psm1")
-        $ModuleName = $ModuleRoot | Split-Path -Leaf
-        $PublicScriptFiles = Get-ChildItem "$ModuleRoot\Public" -File -Filter *.ps1 -Recurse
-        $PrivateScriptFiles = Get-ChildItem -Path "$ModuleRoot\Private" -File -Filter *.ps1 -Recurse
+    $PublicScriptFiles = Get-ChildItem "$env:BHModulePath\Public" -File -Filter *.ps1 -Recurse
+    $PrivateScriptFiles = Get-ChildItem -Path "$env:BHModulePath\Private" -File -Filter *.ps1 -Recurse
 
     $Timestamp = Get-Date -UFormat "%Y%m%d-%H%M%S"
     $PSVersion = $PSVersionTable.PSVersion.Major
@@ -39,8 +42,7 @@ Properties {
     $lines = '----------------------------------------------------------------------'
 
     $Verbose = @{}
-    if($ENV:BHCommitMessage -match "!verbose")
-    {
+    if ($ENV:BHCommitMessage -match "!verbose") {
         $Verbose = @{Verbose = $True}
     }
 
@@ -60,8 +62,10 @@ Task Init -RequiredVariables  {
     "`n"
 }
 
-Task Compile {
+Task Compile -Depends Init {
     $BoilerPlatePrivateFunctionSourcing = @'
+[Net.ServicePointManager]::SecurityProtocol = "tls12, tls11, tls"
+
 # Get public and private function definition files.
 [array]$Public  = Get-ChildItem -Path "$PSScriptRoot\Public\*.ps1" -ErrorAction SilentlyContinue
 [array]$Private = Get-ChildItem -Path "$PSScriptRoot\Private\*.ps1" -ErrorAction SilentlyContinue
@@ -77,26 +81,24 @@ foreach ($import in $Private) {
 }
 
 # Public Functions
-'@ | Set-Content -Path "$ModuleRoot\$ModuleName.psm1"
+'@ | Set-Content -Path "$env:BHModulePath\$env:BHProjectName.psm1"
 
     [System.Collections.ArrayList]$FunctionTextToAdd = @()
-    $Counter = 0
-    foreach ($ScriptFile in $PublicScriptFiles) {
-        $FileContent = Get-Content $ScriptFile.FullName
+    foreach ($ScriptFileItem in $PublicScriptFiles) {
+        $FileContent = Get-Content $ScriptFileItem.FullName
         $SigBlockLineNumber = $FileContent.IndexOf('# SIG # Begin signature block')
         $FunctionSansSigBlock = $($($FileContent[0..$($SigBlockLineNumber-1)]) -join "`n").Trim() -split "`n"
         $null = $FunctionTextToAdd.Add("`n")
         $null = $FunctionTextToAdd.Add($FunctionSansSigBlock)
-        $Counter++
     }
     $null = $FunctionTextToAdd.Add("`n")
 
-    Add-Content -Value $FunctionTextToAdd -Path "$ModuleRoot\$ModuleName.psm1"
+    Add-Content -Value $FunctionTextToAdd -Path "$env:BHModulePath\$env:BHProjectName.psm1"
 
     if ($Cert) {
         # At this point the .psm1 is finalized, so let's sign it
         try {
-            $SetAuthenticodeResult = Set-AuthenticodeSignature -FilePath "$ModuleRoot\$ModuleName.psm1" -cert $Cert
+            $SetAuthenticodeResult = Set-AuthenticodeSignature -FilePath "$env:BHModulePath\$env:BHProjectName.psm1" -cert $Cert
             if (!$SetAuthenticodeResult -or $SetAuthenticodeResult.Status -eq "HashMisMatch") {throw}
         }
         catch {
@@ -111,23 +113,37 @@ Task Test -Depends Compile  {
     $lines
     "`n`tSTATUS: Testing with PowerShell $PSVersion"
 
-    # Gather test results. Store them in a variable and file
-    $TestResults = Invoke-Pester -Path $ProjectRoot\Test -PassThru -OutputFormat NUnitXml -OutputFile "$ProjectRoot\$TestFile"
-
-    # In Appveyor?  Upload our tests! #Abstract this into a function?
-    If($ENV:BHBuildSystem -eq 'AppVeyor')
-    {
-        (New-Object 'System.Net.WebClient').UploadFile(
-            "https://ci.appveyor.com/api/testresults/nunit/$($env:APPVEYOR_JOB_ID)",
-            "$ProjectRoot\$TestFile" )
+    $PesterSplatParams = @{
+        PassThru        = $True
+        OutputFormat    = "NUnitXml"
+        OutputFile      = "$env:BHBuildOutput\$TestFile"
+    }
+    if ($TestResources) {
+        $ScriptParamHT = @{
+            Path = "$env:BHProjectPath\Tests"
+            Parameters = @{TestResources = $TestResources}
+        }
+        $PesterSplatParams.Add("Script",$ScriptParamHT)
+    }
+    else {
+        $PesterSplatParams.Add("Path","$env:BHProjectPath\Tests")
     }
 
-    Remove-Item "$ProjectRoot\$TestFile" -Force -ErrorAction SilentlyContinue
+    # Gather test results. Store them in a variable and file
+    $TestResults = Invoke-Pester @PesterSplatParams
+
+    # In Appveyor?  Upload our tests! #Abstract this into a function?
+    if ($env:BHBuildSystem -eq 'AppVeyor') {
+        (New-Object 'System.Net.WebClient').UploadFile(
+            "https://ci.appveyor.com/api/testresults/nunit/$($env:APPVEYOR_JOB_ID)",
+            "$env:BHBuildOutput\$TestFile" )
+    }
+
+    Remove-Item "$env:BHBuildOutput\$TestFile" -Force -ErrorAction SilentlyContinue
 
     # Failed tests?
     # Need to tell psake or it will proceed to the deployment. Danger!
-    if($TestResults.FailedCount -gt 0)
-    {
+    if ($TestResults.FailedCount -gt 0) {
         Write-Error "Failed '$($TestResults.FailedCount)' tests, build failed"
     }
     "`n"
@@ -137,7 +153,7 @@ Task Build -Depends Test {
     $lines
     
     # Load the module, read the exported functions, update the psd1 FunctionsToExport
-    #Set-ModuleFunctions
+    Set-ModuleFunctions
 
     # Bump the module version if we didn't already
     Try
@@ -151,17 +167,6 @@ Task Build -Depends Test {
     Catch
     {
         "Failed to update version for '$env:BHProjectName': $_.`nContinuing with existing version"
-    }
-
-    if ($Cert) {
-        # At this point the .psd1 is finalized, so let's sign it
-        try {
-            $SetAuthenticodeResult = Set-AuthenticodeSignature -FilePath "$ModuleRoot\$ModuleName.psd1" -cert $Cert
-            if (!$SetAuthenticodeResult -or $SetAuthenticodeResult.Status -eq "HashMisMatch") {throw}
-        }
-        catch {
-            "Failed to sign '$ModuleName.psd1' with Code Signing Certificate"
-        }
     }
 }
 
@@ -180,15 +185,11 @@ Task Deploy -Depends Build {
 
 
 
-
-
-
-
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUo9CFKRbkzQ9vlTz39V3XMFR/
-# dC6gggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUPyTul0sfuWprVDMlDjivCIqH
+# EE+gggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -245,11 +246,11 @@ Task Deploy -Depends Build {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFEBXpXrCHYBx+xhh
-# qUjVnphDqwrEMA0GCSqGSIb3DQEBAQUABIIBAFf5Xr9AfAO7Z52E9nCNnhBSZMO3
-# +kuJToKx4D36r934dFmoCAHWxSCbsLgJ/t7IfMfNv8azbWk991QXpZbkOk1OPq23
-# r/dS4Vh1KWtekdGryfBFSx6L8Yv2s3g6WlmImtWCb9CLsCPOLboHbwsL/uFnjpC9
-# jdnYsi9w8qojnrgSqNqplfSS3Ybf/PTTAsEHV0dmtFRhRrxl97swtfrBlTysZCEA
-# AhCG6ZtvFnBH4fTDedgAyXeYTpsaqmKseQUFVq01IbKg5R98gpdlpHwf5UljZMyE
-# kE8Lh9LaV+mZ3qBd3dMlSvqTnirq1ag5K4pTtsZaX9xlN7Ozuew5V7OTP2k=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFCcEydHpwxk3kTam
+# Aip6t80ILL0HMA0GCSqGSIb3DQEBAQUABIIBABIoM+edDtPCwspTIxq8cvG7aHdv
+# o5A6SyhVcj7sCe3ktIz+08pbK8CUklM98S+xfb+iZ1Niil2hORYmyBXK0XVeuUGq
+# CVyz9qEtPqWERXkjQflQwZc15WLJ6NgIcelNj0KL32pYmauzn1TJvFUZ4a4S0TB0
+# 1LUhTHni+vtaF5b1j6vb8Z2CUaT1FIDxl3VEDvLpwxx7s6VfCNGpt5JfTLSnPmV2
+# PgDvCFdnj7WMvNnVDLq6PShYDHZcghsWVV3BHmRUWr8FY5gCn8h5H83pgefPIF50
+# JOk9C3YPu0cItGfR/Bb1aRvhzzffFxuCug/WfyWnioX8coZ4H+4DXHUPSOs=
 # SIG # End signature block
