@@ -21,15 +21,21 @@ Param (
         Mandatory = $False,
         ParameterSetName = 'help'
     )]
-    [switch]$Help
+    [switch]$Help,
+
+    [Parameter(
+        Mandatory = $False,
+        ParameterSetName = 'help'
+    )]
+    [switch]$AppVeyorContext
 )
 
 # Workflow is build.ps1 -> psake.ps1 -> *Tests.ps1
 
 ##### BEGIN Prepare For Build #####
 
-<#
 $ElevationCheck = [System.Security.Principal.WindowsPrincipal]::new([System.Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)
+<#
 if ($ElevationCheck) {
     Write-Error "It should not be necessary to run the build script from an elevated PowerShell prompt. Halting!"
     $global:FunctionResult = "1"
@@ -274,6 +280,7 @@ if ($ConsentBehaviorAdminValue -ne 0 -or $ConsentPromptBehaviorUserValue -ne 0 -
     $UACEnabled = $True
 }
 
+# BEGIN Build Tasks that we need to Run As Admin #
 if ($(Get-LocalUser).Name -notcontains $SimpleUserName -or
 $(Get-LocalGroupMember -Group "Administrators").Name -notcontains $UserName -or
 $(Get-LocalGroupMember -Group "Remote Management Users").Name -notcontains $UserName -or
@@ -286,18 +293,19 @@ $UACEnabled
         return
     }
 
-    # BEGIN Build Tasks that we need to Run As Admin #
-    if (!$AdminUserCreds) {
+    if (!$AdminUserCreds -and !$ElevationCheck -and !$AppVeyorContext) {
         $CurrentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
         $AdminUserCreds = [pscredential]::new($CurrentUser,$(Read-Host -Prompt "Please enter the password for '$CurrentUser'" -AsSecureString))
     }
 
-    if (Get-UserAdminRights -UserAcct $AdminUserCreds.UserName) {
-        Import-Module $(Resolve-Path "$PSScriptRoot\*Help*\SudoTasks.psm1").Path
-        if (![bool]$(Get-Module -Name "SudoTasks")) {
-            Write-Error "Problem importing the SudoTasks Module from $($(Resolve-Path "$PSScriptRoot\*Help*\SudoTasks.psm1").Path)! Halting!"
-            $global:FunctionResult = "1"
-            return
+    if ($(Get-UserAdminRights -UserAcct $AdminUserCreds.UserName) -or $ElevationCheck -or $AppVeyorContext) {
+        if (!$AppVeyorContext -and !$ElevationCheck) {
+            Import-Module $(Resolve-Path "$PSScriptRoot\*Help*\SudoTasks.psm1").Path
+            if (![bool]$(Get-Module -Name "SudoTasks")) {
+                Write-Error "Problem importing the SudoTasks Module from $($(Resolve-Path "$PSScriptRoot\*Help*\SudoTasks.psm1").Path)! Halting!"
+                $global:FunctionResult = "1"
+                return
+            }
         }
 
         $DisableUACSB = {
@@ -334,10 +342,11 @@ $UACEnabled
         }
 
         $TestAccountCreationSB = {
-            $UserName = $using:UserName
-            $SimpleUserName = $using:SimpleUserName
-            $Password = $using:Password
-            $Creds = $using:Creds
+            param(
+                [string]$UserName,
+                [string]$SimpleUserName,
+                [securestring]$Password
+            )
 
             # Create Temp Local User
             if ($(Get-LocalUser).Name -notcontains $SimpleUserName) {
@@ -355,7 +364,7 @@ $UACEnabled
             Get-LocalGroupMember -Group Administrators | Where-Object {$_.Name -eq $UserName}
         }
 
-        if (!$SudoSessionInfo) {
+        if (!$SudoSessionInfo -and !$ElevationCheck -and !$AppVeyorContext) {
             try {
                 $SudoSessionInfo = New-SudoSessionTask -Credentials $AdminUserCreds -KeepOpen
                 if (!$SudoSessionInfo) {throw "Problem with the New-SudoSessionTask function from SudoTasks.psm1! Halting!"}
@@ -372,8 +381,15 @@ $UACEnabled
         }
 
         try {
-            if ($UACEnabled) {
-                $OriginalUACValues = Invoke-Command -Session $SudoSessionInfo.ElevatedPSSession -ScriptBlock $DisableUACSB
+            if ($UACEnabled -and !$AppVeyorContext -and !$ElevationCheck) {
+                $InvCmdUACSplatParams = @{
+                    ScriptBlock     = $DisableUACSB
+                }
+                if ($SudoSessionInfo) {
+                    $InvCmdUACSplatParams.Add("Session",$SudoSessionInfo.ElevatedPSSession)
+                }
+
+                $OriginalUACValues = Invoke-Command @InvCmdUACSplatParams
                 if (!$OriginalUACValues) {throw "Problem with Invoke-Command `$DisableUACSB! Halting!"}
             }
 
@@ -381,7 +397,14 @@ $UACEnabled
             $(Get-LocalGroupMember -Group "Administrators").Name -notcontains $UserName -or
             $(Get-LocalGroupMember -Group "Remote Management Users").Name -notcontains $UserName
             ) {
-                $TestAccountInfo = Invoke-Command -Session $SudoSessionInfo.ElevatedPSSession -ScriptBlock $TestAccountCreationSB
+                $InvCmdTestAcctSplatParams = @{
+                    ScriptBlock     = $TestAccountCreationSB
+                    ArgumentList    = @($UserName,$SimpleUserName,$Password)
+                }
+                if ($SudoSessionInfo) {
+                    $InvCmdTestAcctSplatParams.Add("Session",$SudoSessionInfo.ElevatedPSSession)
+                }
+                $TestAccountInfo = Invoke-Command @InvCmdTestAcctSplatParams
                 if (!$TestAccountInfo) {throw "Problem with Invoke-Command `$TestAccountCreationSB! Halting!"}
             }
         }
@@ -397,6 +420,7 @@ $UACEnabled
         return
     }
 }
+# END Build Tasks that we need to Run As Admin #
 
 ##### END Tasks Unique to this Module's Build #####
 
@@ -421,6 +445,7 @@ if ([bool]$(Get-Module -Name $env:BHProjectName -ErrorAction SilentlyContinue)) 
     Remove-Module $env:BHProjectName -Force
 }
 
+# BEGIN Build Tasks that we need to Run As Admin #
 if ($NeedInstallation.Count -gt 0 -or
 [bool]$(Get-Module -ListAvailable -Name $env:BHProjectName).RepositorySourceLocation -ne $null
 ) { 
@@ -431,26 +456,23 @@ if ($NeedInstallation.Count -gt 0 -or
         return
     }
 
-    # BEGIN Build Tasks that we need to Run As Admin #
-    if (!$AdminUserCreds) {
+    if (!$AdminUserCreds -and !$ElevationCheck -and !$AppVeyorContext) {
         $CurrentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
         $AdminUserCreds = [pscredential]::new($CurrentUser,$(Read-Host -Prompt "Please enter the password for '$CurrentUser'" -AsSecureString))
     }
 
-    if (Get-UserAdminRights -UserAcct $AdminUserCreds.UserName) {
-        Import-Module $(Resolve-Path "$PSScriptRoot\*Help*\SudoTasks.psm1").Path
-        if (![bool]$(Get-Module -Name "SudoTasks")) {
-            Write-Error "Problem importing the SudoTasks Module from $($(Resolve-Path "$PSScriptRoot\*Help*\SudoTasks.psm1").Path)! Halting!"
-            $global:FunctionResult = "1"
-            return
+    if ($(Get-UserAdminRights -UserAcct $AdminUserCreds.UserName) -or $ElevationCheck -or $AppVeyorContext) {
+        if (!$AppVeyorContext -and !$ElevationCheck) {
+            Import-Module $(Resolve-Path "$PSScriptRoot\*Help*\SudoTasks.psm1").Path
+            if (![bool]$(Get-Module -Name "SudoTasks")) {
+                Write-Error "Problem importing the SudoTasks Module from $($(Resolve-Path "$PSScriptRoot\*Help*\SudoTasks.psm1").Path)! Halting!"
+                $global:FunctionResult = "1"
+                return
+            }
         }
 
         $FunctionsForSBUse = @(
             ${Function:GetElevation}.Ast.Extent.Text
-            ${Function:New-SudoSession}.Ast.Extent.Text
-            ${Function:Remove-SudoSession}.Ast.Extent.Text
-            ${Function:Restore-OriginalSystemConfig}.Ast.Extent.Text
-            ${Function:Start-SudoSession}.Ast.Extent.Text
             ${Function:Get-NativePath}.Ast.Extent.Text
             ${Function:Pause-ForWarning}.Ast.Extent.Text
             ${Function:Update-PackageManagement}.Ast.Extent.Text
@@ -466,10 +488,12 @@ if ($NeedInstallation.Count -gt 0 -or
         }
 
         $ProgramInstallationSB = {
+            param(
+                [array]$FunctionsForSBUse,
+                [System.Collections.ArrayList]$NeedInstallation
+            )
             # Load the functions we packed up:
-            $using:FunctionsForSBUse | foreach { Invoke-Expression $_ }
-
-            $NeedInstallation = $using:NeedInstallation
+            $FunctionsForSBUse | foreach { Invoke-Expression $_ }
 
             [System.Collections.ArrayList]$ProgramInstallResultsArray = @()
             foreach ($SplatParams in $NeedInstallation) {
@@ -481,7 +505,7 @@ if ($NeedInstallation.Count -gt 0 -or
                 }
                 catch {
                     Write-Error $_
-                    Write-Error "The Install-Program.ps1 script failed! Halting!"
+                    Write-Error "The Install-Program function failed! Halting!"
                     $global:FunctionResult = "1"
                     return
                 }
@@ -491,8 +515,10 @@ if ($NeedInstallation.Count -gt 0 -or
         }
 
         $UninstallModuleOfSameNameSB = {
-            $UninstallExistingModule = $using:UninstallExistingModule
-            $ProjectName = $using:ProjectName
+            param (
+                [bool]$UninstallExistingModule,
+                [string]$ProjectName
+            )
 
             if ($UninstallExistingModule -and [bool]$(Get-Module -ListAvailable -Name $ProjectName -ErrorAction SilentlyContinue)) {
                 Uninstall-Module $ProjectName -Force -ErrorAction SilentlyContinue
@@ -501,7 +527,7 @@ if ($NeedInstallation.Count -gt 0 -or
             [bool]$(Get-Module -ListAvailable -Name $ProjectName -ErrorAction SilentlyContinue)
         }
 
-        if (!$SudoSessionInfo) {
+        if (!$SudoSessionInfo -and !$ElevationCheck -and !$AppVeyorContext) {
             try {
                 $SudoSessionInfo = New-SudoSessionTask -Credentials $AdminUserCreds -KeepOpen
                 if (!$SudoSessionInfo) {throw "Problem with the New-SudoSessionTask function from SudoTasks.psm1! Halting!"}
@@ -515,12 +541,28 @@ if ($NeedInstallation.Count -gt 0 -or
 
         try {
             if ($NeedInstallation.Count -gt 0) {
-                $ProgramInstallResultsArray = Invoke-Command -Session $SudoSessionInfo.ElevatedPSSession -ScriptBlock $ProgramInstallationSB
+                $InvCmdPrgInstallSplatParams = @{
+                    ScriptBlock     = $ProgramInstallationSB
+                    ArgumentList    = @($FunctionsForSBUse,$NeedInstallation)
+                }
+                if ($SudoSessionInfo) {
+                    $InvCmdPrgInstallSplatParams.Add("Session",$SudoSessionInfo.ElevatedPSSession)
+                }
+
+                $ProgramInstallResultsArray = Invoke-Command @InvCmdPrgInstallSplatParams
                 if (!$ProgramInstallResultsArray) {throw "Problem with Invoke-Command `$ProgramInstallationSB! Halting!"}
             }
 
             if ($UninstallExistingModule) {
-                $ModuleOfSameNameExists = Invoke-Command -Session $SudoSessionInfo.ElevatedPSSession -ScriptBlock $UninstallModuleOfSameNameSB
+                $InvCmdRmExistingModuleSplatParams = @{
+                    ScriptBlock     = $UninstallModuleOfSameNameSB
+                    ArgumentList    = @($UninstallExistingModule,$ProjectName)
+                }
+                if ($SudoSessionInfo) {
+                    $InvCmdRmExistingModuleSplatParams.Add("Session",$SudoSessionInfo.ElevatedPSSession)
+                }
+
+                $ModuleOfSameNameExists = Invoke-Command @InvCmdRmExistingModuleSplatParams
                 if ($ModuleOfSameNameExists -eq $True) {throw "Problem with Invoke-Command `$UninstallModuleOfSameNameSB! Halting!"}
             }
         }
@@ -536,6 +578,7 @@ if ($NeedInstallation.Count -gt 0 -or
         return
     }
 }
+# END Build Tasks that we need to Run As Admin #
 
 
 $psakeFile = "$env:BHProjectPath\psake.ps1"
@@ -617,8 +660,8 @@ exit ( [int]( -not $psake.build_success ) )
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQU1ZgyT08FWbTxpz95Gp8ahFyp
-# IF2gggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQURCo/u3q4XGMrT2A8K9/gL66F
+# 2ASgggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -675,11 +718,11 @@ exit ( [int]( -not $psake.build_success ) )
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFGTcPtX5u5kX9pa8
-# dGI5wKEMN8BjMA0GCSqGSIb3DQEBAQUABIIBAH8Udu+K7voFMUxMwCYEypnaTJG+
-# EkkMOMnb4RLL/nKuZNGnX0ljbUcZ6qRY0nxU6wd0Zy8h4htzAY9SB5o/7pVCbR54
-# QhqXjCXzPLM+xXjFL56Bw7DoWlG6P2yJa+jbze+1+nyz5Ccw4TcDGOfpE+ekxa7t
-# wlGA0H3xPoBO1cCpRiURxm4dkuWYpFkivm6w8SeNb4f6n/a2zxnMU1jvw91CE5dH
-# jo/7rdoys9HQFDlYkuBvLeB3ZDfDNkFdqU5TuT4avZTmKJr54ve59yLQENVQzU3Q
-# rSQVcWAl1aEW+rEA33gYW/d/1Pd6Y31Q49qjizhn6tHgnTva3NaUJVzjRFw=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFJSRHk6Q3aEtrPQ6
+# WGwlc4KQzDxBMA0GCSqGSIb3DQEBAQUABIIBACVwnbwLvakSZF9OQGXkI2DePCEO
+# QRn2VqkUquLL+tGcjE4najAgE6LjnR8gbbZUt2JhTfviKlupX6wgg4P8pSrDroYN
+# jPLaL3vOGjeP6qTK3iFcjXQ9nyx5UWgdWdpEKo3ex89zLPpEMCv2Ylq6Pa3OBHcb
+# h3o6DIo462iamTnN83rxRO9isvqR9g1v4wrKWO8zbp0hX4AymV4d3+HqeJHnhawI
+# XSTp/u6O/5+LN78i+rmFQ6yVeMsFvTD32ZCJ/13n441d7V/skwBFDo+Nz5bPvxqf
+# YhiCKCKT/u8I5q8h9wgycMEQi5sm4ORhqIG6dG8B0Ch0a0f4DibM4sV6KXI=
 # SIG # End signature block
