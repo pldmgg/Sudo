@@ -28,12 +28,14 @@ Param (
 
 ##### BEGIN Prepare For Build #####
 
+<#
 $ElevationCheck = [System.Security.Principal.WindowsPrincipal]::new([System.Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)
 if ($ElevationCheck) {
     Write-Error "It should not be necessary to run the build script from an elevated PowerShell prompt. Halting!"
     $global:FunctionResult = "1"
     return
 }
+#>
 
 if ($AdminUserCreds) {
     # Make sure $AdminUserCreds.UserName format is <Domain>\<User> and <LocalHostName>\<User>
@@ -615,8 +617,8 @@ exit ( [int]( -not $psake.build_success ) )
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUmnfJbmN/xj8FIdUkvG1Uywso
-# O4Ggggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQU1ZgyT08FWbTxpz95Gp8ahFyp
+# IF2gggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -673,11 +675,11 @@ exit ( [int]( -not $psake.build_success ) )
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFGkkiLtf75fWbsbz
-# M6/98tWfwM8LMA0GCSqGSIb3DQEBAQUABIIBAEjC0UoLqMIKio5d72zrzl5McSee
-# Ij/yEOBomeXnXhvj56GPZOgJ1cZrpcWJ3XEhUGCcq0cJNmUQ4sZVSe3to3AnjMNX
-# Fw4GezrBA7RS/mV1TJlrXuEoc4nL9pvbCHsL1cOk7AAEX9O5DzaXuze64tEj6Ka1
-# GBeTI0MPm5PzC21lplWXdnXKOAy82wWLwgUJJ0CQdTsiAnyp45ePjO34K6wVuZ03
-# +BMTLdu8Bku+RyBtummN88ezq1bT7SQRJuSymT3lIsIw4bUzQGi1QTF67wZ/ntxw
-# oYXd0xPo9F0fiWtNfUkd911Hvt2lAMmgA7ZJx+Yt6Bu+EBoMmDJxjChl8Fc=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFGTcPtX5u5kX9pa8
+# dGI5wKEMN8BjMA0GCSqGSIb3DQEBAQUABIIBAH8Udu+K7voFMUxMwCYEypnaTJG+
+# EkkMOMnb4RLL/nKuZNGnX0ljbUcZ6qRY0nxU6wd0Zy8h4htzAY9SB5o/7pVCbR54
+# QhqXjCXzPLM+xXjFL56Bw7DoWlG6P2yJa+jbze+1+nyz5Ccw4TcDGOfpE+ekxa7t
+# wlGA0H3xPoBO1cCpRiURxm4dkuWYpFkivm6w8SeNb4f6n/a2zxnMU1jvw91CE5dH
+# jo/7rdoys9HQFDlYkuBvLeB3ZDfDNkFdqU5TuT4avZTmKJr54ve59yLQENVQzU3Q
+# rSQVcWAl1aEW+rEA33gYW/d/1Pd6Y31Q49qjizhn6tHgnTva3NaUJVzjRFw=
 # SIG # End signature block
