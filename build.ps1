@@ -294,8 +294,11 @@ $UACEnabled
         $CurrentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
         $AdminUserCreds = [pscredential]::new($CurrentUser,$(Read-Host -Prompt "Please enter the password for '$CurrentUser'" -AsSecureString))
     }
+    if ($AdminUserCreds) {
+        $UserIsAdmin = Get-UserAdminRights -UserAcct $AdminUserCreds.UserName
+    }
 
-    if ($(Get-UserAdminRights -UserAcct $AdminUserCreds.UserName) -or $ElevationCheck -or $AppVeyorContext) {
+    if ($UserIsAdmin -or $ElevationCheck -or $AppVeyorContext) {
         if (!$AppVeyorContext -and !$ElevationCheck) {
             Import-Module $(Resolve-Path "$PSScriptRoot\*Help*\SudoTasks.psm1").Path
             if (![bool]$(Get-Module -Name "SudoTasks")) {
@@ -458,7 +461,11 @@ if ($NeedInstallation.Count -gt 0 -or
         $AdminUserCreds = [pscredential]::new($CurrentUser,$(Read-Host -Prompt "Please enter the password for '$CurrentUser'" -AsSecureString))
     }
 
-    if ($(Get-UserAdminRights -UserAcct $AdminUserCreds.UserName) -or $ElevationCheck -or $AppVeyorContext) {
+    if ($AdminUserCreds) {
+        $UserIsAdmin = Get-UserAdminRights -UserAcct $AdminUserCreds.UserName
+    }
+
+    if ($UserIsAdmin -or $ElevationCheck -or $AppVeyorContext) {
         if (!$AppVeyorContext -and !$ElevationCheck) {
             Import-Module $(Resolve-Path "$PSScriptRoot\*Help*\SudoTasks.psm1").Path
             if (![bool]$(Get-Module -Name "SudoTasks")) {
@@ -657,8 +664,8 @@ exit ( [int]( -not $psake.build_success ) )
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUsnDEZwL7fzGZSOfEipigYQSJ
-# euigggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQU70SJOscy9wKXN/FIgZldGiCC
+# bt2gggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -715,11 +722,11 @@ exit ( [int]( -not $psake.build_success ) )
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFJcMHYK8Op6WeYTc
-# hfHsPg2OclGIMA0GCSqGSIb3DQEBAQUABIIBAHSD1LCfepJX62b8u91ySmyGoFRg
-# N+ySPN4JQrZjGKriVzrupDTPBDCnfLiIWtbzPTVuxytBIsCxMBEDErMYpMo5qkZA
-# poxx8ifUsls08QIIOtC+PfnY37dEnIg9Bl4o2HH9DBzL76Yz159Pkz9wZqvY7Wgn
-# AGQ1okISLiwan5DYv0qGP1gbjAVB2WDGfrzLgPAIEMfBpgepWo/QTZvE75czbx2R
-# H1EIGkPNv0jQ/wlwyYgbgO4Wj02MS9HVoZX+4U85BByNRlskCqKtX2FOmhwG139H
-# W8kFy5/7dkMzV2NviOscsQcX2RhA6jrtbKdvpSFfrvnkKNUt2VvZKdj2Yos=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFMF70QwUFdtrgTK3
+# 92fY8i+7ULUwMA0GCSqGSIb3DQEBAQUABIIBAAqEcZIr04KvT5L1hSYQ1xX4j228
+# SN+3OX5X1HGLCg7PJcUQqRH8X72VR0QL609qeuN0pD9NDKA4l3qJthcydWv/DKJG
+# BqApCzcckVHlYnOSgEjRoMVADOB1fkvbwLbENPLzI9F2D6L2khzkOQORD8hx0xtR
+# asHf9/sugSnNXjT/nx12cVf1L3ZHtcygT1Goc7vzW+no2+c1ieahoqb7lANLQ3oy
+# CJ/rolfewmoPf6sO5L9Zi+ZIMO7N/NNREbyTUjxM9O54aWEkWaZLEw48M7x0vryF
+# 7Nx1H2hYt5fiGnpswB/qyqVBnWgZ5FojCAJMAh9LSxJHIfpx0RbFgBDGTtg=
 # SIG # End signature block
