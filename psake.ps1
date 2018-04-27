@@ -158,7 +158,8 @@ Task Build -Depends Test {
     # Bump the module version if we didn't already
     Try
     {
-        [version]$GalleryVersion = Get-NextPSGalleryVersion -Name $env:BHProjectName -ErrorAction Stop
+        [version]$GalleryVersion = Get-NextNugetPackageVersion -Name $env:BHProjectName -ErrorAction Stop
+        #[version]$GalleryVersion = Get-NextPSGalleryVersion -Name $env:BHProjectName -ErrorAction Stop
         [version]$GithubVersion = Get-MetaData -Path $env:BHPSModuleManifest -PropertyName ModuleVersion -ErrorAction Stop
         if($GalleryVersion -ge $GithubVersion) {
             Update-Metadata -Path $env:BHPSModuleManifest -PropertyName ModuleVersion -Value $GalleryVersion -ErrorAction stop
@@ -183,25 +184,11 @@ Task Deploy -Depends Build {
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUW6PRyNJgOl3p+UublB64pb17
-# 8Jagggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQU7CTM562shmgNrIy0t3NYPHfY
+# AFygggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -258,11 +245,11 @@ Task Deploy -Depends Build {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFMvkvo76AZJneBjJ
-# lnEbmgs5wvmzMA0GCSqGSIb3DQEBAQUABIIBAHvLGkKXJhsRnbMfxla264Iom2JP
-# /mRaRssnQZb6rEAE/VmopUE7vLjCCeGjU9+x14r2xhJgd3h3LlIE1UsmYZ2btig/
-# i7um8kSsKEiSstHDQjV4AjBlGT5d4AF4YfUHgRC5EdezOrDW46W+Vatmc5W4nrm7
-# zSTphkhsEyOuvKHW221uUiPwz0XdkENut7xqlOuNQefmINT0VZefDq6ozbWmursr
-# B9h4sTd7YiVVga+UB1mNrQAtLleTQ81pm3tUOKKcEvTkC1yQzkTqHxzVZbOsxMBC
-# i1CfZfYFrEjzpnsJdU2D6WCDF4KU1LYt8GCSnuHLq436B+mYIdp8Ih0odrM=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFM1fwf4ZIuRWtX+E
+# MVH1TRJ9u/I9MA0GCSqGSIb3DQEBAQUABIIBAH6RJk4nf48PiB82IdI2I2XUqfbQ
+# bHb64xFBWB6OTAL9/Ux6DAD+bg4FjOgrYeIA92EVgj2L57fZoXbbJiZdjFUpHQxA
+# m/D7MruM0IRUinazBy/nrbWkCdaKssR3dUHAGPbffreUDRiilv1NoPW5H2El8LsB
+# 9IrQpVDBfU1/MFUVc/K9Rxs6RCIOYGrtbze6GDoo3JEqgUdn35fLFwYsF8GMuGWv
+# qalfEbB8cy31RxILykHj5o9ken1DaEVUe4/GpDsUKzLJMBUujHK5C4YNQx8gaPOc
+# CwZ5ZPpbvoNmLMYR7tI/vSlb9E33rQ+i9RNXUlMto0es/8WxsIDJidPHCk0=
 # SIG # End signature block
