@@ -52,8 +52,8 @@ Summary              : NuGet is the package manager for the Microsoft developmen
 ### Scenario 2: Create a New PSSession with Sudo Privileges, and enter the session
 
 ```powershell
-PS C:\Users\zeroadmin> $MyElevatedSession = New-SudoSession -UserName -Credentials $TestAdminCreds
-PS C:\Users\zeroadmin> Enter-PSSession -Session $MyElevatedSession.ElevatedPSSession
+PS C:\Users\zeroadmin> $SudoSessionInfo = New-SudoSession -Credentials $TestAdminCreds
+PS C:\Users\zeroadmin> Enter-PSSession -Session $SudoSessionInfo.ElevatedPSSession
 [localhost]: PS C:\Users\testadmin\Documents> whoami
 zero\testadmin
 ```
@@ -61,11 +61,11 @@ zero\testadmin
 ### Scenario 3: Create a New PSSession with Sudo Privileges and run one-off commands in that session
 
 ```powershell
-PS C:\Users\zeroadmin> $MyElevatedSession = New-SudoSession -Credentials $ZeroAdminCreds
-PS C:\Users\zeroadmin> Invoke-Command -Session $MyElevatedSession.ElevatedPSSession -Scriptblock {Install-Package Nuget.CommandLine -Source chocolatey}
+PS C:\Users\zeroadmin> $SudoSessionInfo = New-SudoSession -Credentials $ZeroAdminCreds
+PS C:\Users\zeroadmin> Invoke-Command -Session $SudoSessionInfo.ElevatedPSSession -Scriptblock {Install-Package Nuget.CommandLine -Source chocolatey}
 ...
 # When you are finished running commands against this Sudo Session, remove it via:
-PS C:\Users\zeroadmin> Remove-SudoSession -OriginalConfigInfo $MyElevatedSesion.WSManAndRegistryChanges -SessionToRemove $MyElevatedSession.ElevatedPSSession
+PS C:\Users\zeroadmin> Remove-SudoSession -OriginalConfigInfo $SudoSessionInfo.WSManAndRegistryChanges -SessionToRemove $SudoSessionInfo.ElevatedPSSession
 
 ```
 
