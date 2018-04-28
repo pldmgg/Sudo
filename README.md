@@ -71,7 +71,7 @@ PS C:\Users\zeroadmin> Remove-SudoSession -OriginalConfigInfo $SudoSessionInfo.W
 
 ### Scenario 4: You use the New-SudoSession function with the -KeepOpen switch. The PowerShell process that owns the new SudoSession is unexpectedly closed/killed before you get a chance to run the Remove-SudoSession.
 
-Revert your WSMAN and CredSSP settings to what they was prior to using the `New-SudoSession` function by opening a new PowerShell Session (does not matter if it is elevated or not) and:
+Revert your WSMAN and CredSSP settings to what they were prior to using the `New-SudoSession` function by opening a new PowerShell Session (does not matter if it is elevated or not) and:
 
 ```powershell
 PS C:\Users\zeroadmin> Import-Module Sudo
