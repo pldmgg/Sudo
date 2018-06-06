@@ -3,6 +3,7 @@
 # Get public and private function definition files.
 [array]$Public  = Get-ChildItem -Path "$PSScriptRoot\Public\*.ps1" -ErrorAction SilentlyContinue
 [array]$Private = Get-ChildItem -Path "$PSScriptRoot\Private\*.ps1" -ErrorAction SilentlyContinue
+$ThisModule = $(Get-Item $PSCommandPath).BaseName
 
 # Dot source the Private functions
 foreach ($import in $Private) {
@@ -14,7 +15,65 @@ foreach ($import in $Private) {
     }
 }
 
+# Install-PSDepend if necessary so that we can install any dependency Modules
+if ($(Test-Path "$PSScriptRoot\module.requirements.psd1")) {
+    if (![bool]$(Get-Module -ListAvailable PSDepend -ErrorAction SilentlyContinue)) {
+        try {
+            [string]$UserModulePath = Join-Path $([Environment]::GetFolderPath('MyDocuments')) 'WindowsPowerShell\Modules'
+            $ExistingProgressPreference = "$ProgressPreference"
+            $ProgressPreference = 'SilentlyContinue'
+            # Bootstrap nuget if we don't have it
+            if ([bool]$(Get-ChildItem 'nuget.exe' -ErrorAction SilentlyContinue)) {
+                $NugetPath = $(Get-ChildItem nuget.exe).FullName
+            }
+            else {
+                $NugetPath = $(Get-Command 'nuget.exe' -ErrorAction SilentlyContinue).Path
+            }
+            
+            if (![bool]$NugetPath) {
+                $NugetPath = Join-Path $env:USERPROFILE nuget.exe
+                if (![bool]$(Test-Path $NugetPath)) {
+                    Invoke-WebRequest -Uri 'https://dist.nuget.org/win-x86-commandline/latest/nuget.exe' -UseBasicParsing -OutFile $NugetPath
+                }
+            }
+    
+            # Bootstrap PSDepend, re-use nuget.exe for the module
+            if (!$(Test-Path $UserModulePath)) { $null = New-Item -ItemType Directory $UserModulePath -Force }
+            $NugetParams = 'install', 'PSDepend', '-Source', 'https://www.powershellgallery.com/api/v2/',
+                        '-ExcludeVersion', '-NonInteractive', '-OutputDirectory', $UserModulePath
+            & $NugetPath @NugetParams
+            if (!$(Test-Path "$(Join-Path $UserModulePath PSDepend)\nuget.exe")) {
+                Move-Item -Path $NugetPath -Destination "$(Join-Path $UserModulePath PSDepend)\nuget.exe" -Force
+            }
+            $ProgressPreference = $ExistingProgressPreference
+        }
+        catch {
+            Write-Error $_
+            Write-Error "Installing the PSDepend Module failed! The $ThisModule Module will not be loaded. Halting!"
+            $ProgressPreference = $ExistingProgressPreference
+            Write-Warning "Please unload the $ThisModule Module via:`nRemove-Module $ThisModule"
+            $global:FunctionResult = "1"
+            return
+        }
+    }
+    
+    if (![bool]$(Get-Module PSDepend -ErrorAction SilentlyContinue)) {
+        try {
+            Import-Module PSDepend
+            $null = Invoke-PSDepend -Path "$PSScriptRoot\module.requirements.psd1" -Install -Import -Force
+        }
+        catch {
+            Write-Error $_
+            Write-Error "Problem with PSDepend Installing/Importing Module Dependencies! The $ThisModule Module will not be loaded. Halting!"
+            Write-Warning "Please unload the $ThisModule Module via:`nRemove-Module $ThisModule"
+            $global:FunctionResult = "1"
+            return
+        }
+    }
+}
+
 # Public Functions
+
 
 
 <#
@@ -1400,8 +1459,8 @@ function Start-SudoSession {
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUok0+TGemozDVB4mza5HwMTBr
-# Wcygggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUSvI0Ozhd0jEnX5YNkp+GVbON
+# /Cygggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -1458,11 +1517,11 @@ function Start-SudoSession {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFNRSHBLGyU3rR22u
-# 7q2k1o2lfZGaMA0GCSqGSIb3DQEBAQUABIIBALK/cXDuq5FVm02uLXrmTcYwD3m7
-# xYaOJAL+61B5FPhbiqB4EE4esaT+5umVXz+RONL4u3rCR23jjToEzrttmoftx/jc
-# GrhN+1Fqe6FqxtOWGaIjIMqCLJ2Oce6UEorN7btxAvgtnxkrbercDFxed+nPNzD3
-# 08QAoESaHIeBqsVzh6Pqoa20Jm0QdFLfvqciAMXfH4Fe+GBS9Kx96eAWLnEeOa/i
-# t+qcGHmdc4EQgpA0hW3zI8kWn2Su+dDkpcYrJ4uEkUuX52lkg+m8Lpj54rWAU83r
-# PdO5CgqUmS/kgAVkH/7f996liBDZXE1TR82lleDzVukzKkGmto/MXk1l0VM=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFC6KesjQY08mbNSu
+# T3/+QdFT/RwrMA0GCSqGSIb3DQEBAQUABIIBAKho+HndhOE+l740aih5yJs0Mrqp
+# ZtGRSC+9EbD7fiBCRAuGxTIpsdr58rX5CDrlhkt0cEYxZq1ggUjhVgC5Cklm7Ue4
+# rexDBrCMNyIUwPMlBOrI4A/klhYpiZOLPxAhiVPKRXcintPU6s3fpw6yjb/Rx5EL
+# nA24JqmcXLD+661BBmh6JHzrrejpmbVrCrtx9xO+E02ZastuF33o9PQcbinMjh0u
+# ELWb9IsvifSL9twGyWngl2LYkJcSef+XoBmu1RLY+osOg9+jTSCJJEpOJNs7q7RH
+# CVSt98Q/cxD+NzlKhnnkW7kOak2QTQO7kH/yvYmXf5fJqDgHM5jh/UdVEdk=
 # SIG # End signature block

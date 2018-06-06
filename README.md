@@ -82,6 +82,21 @@ PS C:\Users\zeroadmin> Restore-OriginalSystemConfig -SudoSessionChangesLogFilePa
 
 ```
 
+## Build
+
+Run Windows PowerShell 5.1 non-elevated (i.e. do NOT 'Run as Administrator') and...
+
+```
+git clone https://github.com/pldmgg/Sudo.git
+
+# Assuming the current user is an Adminstrator on the localhost...
+$CurrentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+$AdminUserCreds = [pscredential]::new($CurrentUser,$(Read-Host -Prompt "Please enter the password for '$CurrentUser'" -AsSecureString))
+if (!$(Test-Path "$HOME\ModuleBuilds")) {$null = New-Item -ItemType Directory "$HOME\ModuleBuilds"}
+
+.\Sudo\build.ps1 -AdminUserCreds $AdminUserCreds *> "$HOME\ModuleBuildTests\Sudo.log"
+```
+
 ## Notes
 
 * PSGallery: https://www.powershellgallery.com/packages/Sudo

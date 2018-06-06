@@ -154,6 +154,7 @@ try {
     # The specific error this fixes is a problem with the Publish-Module cmdlet from PowerShellGet. PSDeploy
     # calls Publish-Module without the -Force parameter which results in this error: https://github.com/PowerShell/PowerShellGet/issues/79
     # This is more a problem with PowerShellGet than PSDeploy.
+    <#
     Remove-Module PSDeploy
     $PSDeployScriptToEdit = Get-Childitem -Path $(Get-Module -ListAvailable PSDeploy).ModuleBase -File -Recurse -Filter "PSGalleryModule.ps1"
     [System.Collections.ArrayList][array]$PSDeployScriptContent = Get-Content $PSDeployScriptToEdit.FullName
@@ -161,6 +162,7 @@ try {
     $IndexOfLineOfInterest = $PSDeployScriptContent.IndexOf($LineOfInterest)
     $PSDeployScriptContent.Insert($($IndexOfLineOfInterest+1),"            Force      = `$True")
     Set-Content -Path $PSDeployScriptToEdit.FullName -Value $PSDeployScriptContent
+    #>
     Import-Module PSDeploy
 }
 catch {
@@ -193,7 +195,7 @@ foreach ($FileItem in $FilesToAnalyze) {
     $contents = Get-Content -Path $FileItem.FullName -ErrorAction Stop
     $errors = $null
     $null = [System.Management.Automation.PSParser]::Tokenize($contents, [ref]$errors)
-    if ($errors.Count -gt 0) {
+    if ($errors.Count -gt 0 -and $FileItem.Name -ne "$env:BHProjectName.psm1") {
         $null = $InvalidPowerShell.Add($FileItem)
     }
 }
@@ -308,6 +310,22 @@ $UACEnabled
         $AdminUserCreds = [pscredential]::new($CurrentUser,$(Read-Host -Prompt "Please enter the password for '$CurrentUser'" -AsSecureString))
     }
     if ($AdminUserCreds) {
+        # Make sure there aren't any orphaned SIDs in the Local Administrators Group. This will break Get-UserAdminRights
+        function ListAdministrators {
+            $computer = [ADSI]("WinNT://" + $env:ComputerName + ",computer")
+            $group = $computer.psbase.children.find("Administrators")
+            $group.psbase.invoke("Members") | %{$_.GetType().InvokeMember("ADsPath",'GetProperty',$null,$_,$null)}
+        }
+        $LocalAdminGroupMembers = ListAdministrators
+        # Remove the orphaned SID with: $group.Remove(WinNT://<sid>
+        $SidRegex = "^S-\d-\d+-(\d+-){1,14}\d+$"
+        $OrphanedSIDs = $($LocalAdminGroupMembers | foreach {$_ -replace 'WinNT://',''}) -match $SidRegex
+        if ([bool]$($OrphanedSIDs)) {
+            Write-Error "There are one or more orphaned User SIDs in the Local Administrators Group:`n$($OrphanedSIDs -join "`n")`nPlease remove them before continuing. Halting!"
+            $global:FunctionResult = "1"
+            return
+        }
+
         $UserIsAdmin = Get-UserAdminRights -UserAcct $AdminUserCreds.UserName
     }
 
@@ -677,8 +695,8 @@ exit ( [int]( -not $psake.build_success ) )
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQU/4+GXRsmsW7/X2Y+Xt76Kf12
-# hF6gggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUuUoRWk2ATaRipyxTwKjG9973
+# UGugggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -735,11 +753,11 @@ exit ( [int]( -not $psake.build_success ) )
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFMwsDfU78C58gosw
-# A8Rbw1PIrbK3MA0GCSqGSIb3DQEBAQUABIIBAMAyQOs06mWf3QKyExuv7ti/KVwB
-# nLlYWpodtlADm89iKGmWSanHYhtnkjRfaSGp2U/WtbOCO0vKiB6KaQbjJUeKtq8+
-# K4IonfUDgcMwGVEyuQHcVH6GW7R2Unn690ByrtJr7Unqonc4OCDV3pVoEmis8Epw
-# ZeEnvEczNsqOHh8ims0Qw0O5uYPYAg8VnGU32XYdKrJ3XS/koYCRGpjEr9DIe2o6
-# 60FqBtX28qJhtLTqY0eOh9MIaS+sl7PF3NimKYjBKSV5P28T4BEWuc7zeoIxDpd9
-# qlohaccJ00atVVD2f2+1HpqgRhjFfbi3lH0B3N2KAKtJGwglv6a2RTZHXV4=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFD4YUhla5PYPLYnY
+# OSqAGF2esbOZMA0GCSqGSIb3DQEBAQUABIIBAHF185/TcreEjOmq1EtM6KY6iqJ+
+# UKTuKOSFCJbfgxxRsE4bJVuizRrcrl/XW42tMQ/6nF5YUy42U4MOwIXAXPtPsqrI
+# RH4N6/+FrSfuwYH1UJaduOFWL3QLoeKaBCFy+20oSJ3fAY6ttf0+psnvHlB34cIn
+# ciWyfO7U9l1cGqeVciOg3hZHU4mZWolD5pjfreHQ8t0VM+KJQSluqAPRbnYU72EZ
+# YlnzT33OzmF/MAHhQKaRmTB97uzqPjxqOpl8Is6XHsAQxGIBPW4U1nnoCAt2Ktxn
+# ogv3QvB0O8gp5wQtGVaHINcGtb5pHhp8sZJQeoRMDJsmsSKASh37xEPmUmQ=
 # SIG # End signature block
