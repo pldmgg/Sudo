@@ -86,7 +86,7 @@ PS C:\Users\zeroadmin> Restore-OriginalSystemConfig -SudoSessionChangesLogFilePa
 
 Run Windows PowerShell 5.1 non-elevated (i.e. do NOT 'Run as Administrator') and...
 
-```
+```powershell
 git clone https://github.com/pldmgg/Sudo.git
 
 # Assuming the current user is an Adminstrator on the localhost...

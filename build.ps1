@@ -154,15 +154,13 @@ try {
     # The specific error this fixes is a problem with the Publish-Module cmdlet from PowerShellGet. PSDeploy
     # calls Publish-Module without the -Force parameter which results in this error: https://github.com/PowerShell/PowerShellGet/issues/79
     # This is more a problem with PowerShellGet than PSDeploy.
-    <#
-    Remove-Module PSDeploy
+    Remove-Module PSDeploy -ErrorAction SilentlyContinue
     $PSDeployScriptToEdit = Get-Childitem -Path $(Get-Module -ListAvailable PSDeploy).ModuleBase -File -Recurse -Filter "PSGalleryModule.ps1"
     [System.Collections.ArrayList][array]$PSDeployScriptContent = Get-Content $PSDeployScriptToEdit.FullName
     $LineOfInterest = $($PSDeployScriptContent | Select-String -Pattern ".*?Verbose[\s]+= \`$VerbosePreference").Matches.Value
     $IndexOfLineOfInterest = $PSDeployScriptContent.IndexOf($LineOfInterest)
     $PSDeployScriptContent.Insert($($IndexOfLineOfInterest+1),"            Force      = `$True")
     Set-Content -Path $PSDeployScriptToEdit.FullName -Value $PSDeployScriptContent
-    #>
     Import-Module PSDeploy
 }
 catch {
