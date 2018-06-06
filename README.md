@@ -94,7 +94,9 @@ $CurrentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 $AdminUserCreds = [pscredential]::new($CurrentUser,$(Read-Host -Prompt "Please enter the password for '$CurrentUser'" -AsSecureString))
 if (!$(Test-Path "$HOME\ModuleBuilds")) {$null = New-Item -ItemType Directory "$HOME\ModuleBuilds"}
 
-.\Sudo\build.ps1 -AdminUserCreds $AdminUserCreds *> "$HOME\ModuleBuildTests\Sudo.log"
+# NOTE: Running the below will present a UAC prompt. You must manually click in the affirmative for the build to proceed
+.\Sudo\build.ps1 -AdminUserCreds $AdminUserCreds *> "$HOME\ModuleBuilds\Sudo.log"
+
 ```
 
 ## Notes
