@@ -111,12 +111,6 @@ if ($(Test-Path "$PSScriptRoot\module.requirements.psd1")) {
         - RevertedChangesFilePath - Path to the .xml file that logs exactly what changes (if any) were made to WSMAN/CredSSP when
         reverting configuration back to what it was prior to using the New-SudoSession function
 
-        IMPORTANT NOTE: By default, all changes made to WSMAN/CredSSP are immediately reverted after the Sudo PSSession has
-        been Opened. The Sudo Session will stay open for approximately 3 minutes in this state. If you would like to keep
-        the Sudo Session open indefinitely and delay reverting WSMAN/CredSSP configuration changes, use the -KeepOpen
-        switch. If the -KeepOpen switch is used the aforementioned 'RevertedChangesFilePath' will be $null (because nothing
-        gets reverted until you use the Remove-SudoSession function).
-
     .NOTES
         Recommend assigning this function to a variable when it is used so that it can be referenced in the companion
         function Remove-SudoSession. If you do NOT assign a variable to this function when it is used, you can always
@@ -139,12 +133,6 @@ if ($(Test-Path "$PSScriptRoot\module.requirements.psd1")) {
         This parameter takes a System.Management.Automation.PSCredential object with Administrator privileges.
 
         This parameter is mandatory if you do NOT use the -Password parameter.
-
-    .PARAMETER KeepOpen
-        This parameter is a switch.
-
-        If used, the configuration changes made to WSMan/CredSSP will remain until you specifically use the Remove-SudoSession
-        function. This allows the Sudo Session to stay open for longer than 3 minutes.
 
     .PARAMETER SuppressTimeWarning
         This parameter is a switch.
@@ -203,12 +191,6 @@ function New-SudoSession {
             ParameterSetName='Supply Credentials'
         )]
         [System.Management.Automation.PSCredential]$Credentials,
-
-        # If this switch is not used, then the New SudoSession will only stay open for ~3 minutes.
-        # IMPORTANT NOTE: If it IS used, then either the 'Remove-SudoSession' or 'Restore-OriginalSystemConfig' functions
-        # MUST be used to revert WSMAN and/or CredSSP configurations to what ther were prior to using the 'New-SudoSession' function 
-        [Parameter(Mandatory=$False)]
-        [switch]$KeepOpen,
 
         # Meant for use within Start-SudoSession code. Suppresses warning message about the Elevated PSSession only
         # being open for 3 minutes since that doesn't apply to the Start-SudoSession function (where it's only open
@@ -304,6 +286,7 @@ function New-SudoSession {
     `$SudoSessionChangesPSObject = '$SudoSessionChangesPSObject'
     `$CurrentUser = '$CurrentUser'
     `$TranscriptPath = '$TranscriptPath'
+    `$LocalHostFQDN = '$LocalHostFQDN'
 
 "@ + @'
     Start-Transcript -Path $TranscriptPath -Append
@@ -444,7 +427,7 @@ function New-SudoSession {
     $Ouput.Add("WSMANServerCredSSPStateChange",$WSMANServerCredSSPStateChange)
     
     if ($CredSSPClientSetting -eq 'false') {
-        Enable-WSManCredSSP -DelegateComputer localhost -Role Client -Force
+        Enable-WSManCredSSP -DelegateComputer $LocalHostFQDN -Role Client -Force
         $WSMANClientCredSSPStateChange = $True
     }
     $Output.Add("WSMANClientCredSSPStateChange",$WSMANClientCredSSPStateChange)
@@ -481,8 +464,10 @@ function New-SudoSession {
     $Process.WaitForExit()
     $SystemConfigScriptResult = Import-CliXML $SudoSessionChangesPSObject
 
-    $ElevatedPSSession = New-PSSession -Name "Sudo$SimpleUserName" -Authentication CredSSP -Credential $Credentials
+    $NewPSSessionName = "Sudo" + $SimpleUserName + $(Get-Date -Format MMddyy_hhmmss)
+    $ElevatedPSSession = New-PSSession -Name $NewPSSessionName -Authentication CredSSP -Credential $Credentials
 
+    <#
     if (!$KeepOpen) {
         try {
             $RestoreOriginalSystemConfig = Restore-OriginalSystemConfig -OriginalConfigInfo $SystemConfigScriptResult -ExistingSudoSession $ElevatedPSSession -Credentials $Credentials
@@ -502,6 +487,7 @@ function New-SudoSession {
 
         Write-Warning $WrnMsg
     }
+    #>
 
     New-Variable -Name "NewSessionAndOriginalStatus" -Scope Global -Value $(
         [pscustomobject][ordered]@{
@@ -517,8 +503,14 @@ function New-SudoSession {
     # Cleanup 
     Remove-Item $SystemConfigScriptFilePath
     
-    if (!$($SuppressTimeWarning -or $KeepOpen)) {
-        Write-Warning "The New SudoSession named '$($ElevatedPSSession.Name)' with Id '$($ElevatedPSSession.Id)' will stay open for approximately 3 minutes!"
+    if (!$SuppressTimeWarning) {
+        $WrnMsg = "Please be sure to run...`n    Remove-SudoSession -SessionToRemove `$(Get-PSSession -Id $($ElevatedPSSession.Id))`n" +
+        "...before you close PowerShell in order to remove the SudoSession and revert WSMAN and CredSSP configuration changes."
+        Write-Warning $WrnMsg
+        $WrnMsg = "If, for some reason, this current PowerShell process (PID $PID) is terminated before you've had a chance to run...`n" +
+        "    Remove-SudoSession -SessionToRemove `$(Get-PSSession -Id $($ElevatedPSSession.Id))`n...open a new PowerShell sesion and run...`n" +
+        "    Import-Module Sudo`n    Restore-OriginalSystemConfig -SudoSessionChangesLogFilePath `"$SudoSessionChangesPSObject`""
+        Write-Warning $WrnMsg
     }
 
     ##### END Main Body #####
@@ -1459,8 +1451,8 @@ function Start-SudoSession {
 # SIG # Begin signature block
 # MIIMiAYJKoZIhvcNAQcCoIIMeTCCDHUCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUSvI0Ozhd0jEnX5YNkp+GVbON
-# /Cygggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUxGrWHZODoRlMxi+0ob/ST6UW
+# N8agggn9MIIEJjCCAw6gAwIBAgITawAAAB/Nnq77QGja+wAAAAAAHzANBgkqhkiG
 # 9w0BAQsFADAwMQwwCgYDVQQGEwNMQUIxDTALBgNVBAoTBFpFUk8xETAPBgNVBAMT
 # CFplcm9EQzAxMB4XDTE3MDkyMDIxMDM1OFoXDTE5MDkyMDIxMTM1OFowPTETMBEG
 # CgmSJomT8ixkARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMT
@@ -1517,11 +1509,11 @@ function Start-SudoSession {
 # ARkWA0xBQjEUMBIGCgmSJomT8ixkARkWBFpFUk8xEDAOBgNVBAMTB1plcm9TQ0EC
 # E1gAAAH5oOvjAv3166MAAQAAAfkwCQYFKw4DAhoFAKB4MBgGCisGAQQBgjcCAQwx
 # CjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYKKwYBBAGC
-# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFC6KesjQY08mbNSu
-# T3/+QdFT/RwrMA0GCSqGSIb3DQEBAQUABIIBAKho+HndhOE+l740aih5yJs0Mrqp
-# ZtGRSC+9EbD7fiBCRAuGxTIpsdr58rX5CDrlhkt0cEYxZq1ggUjhVgC5Cklm7Ue4
-# rexDBrCMNyIUwPMlBOrI4A/klhYpiZOLPxAhiVPKRXcintPU6s3fpw6yjb/Rx5EL
-# nA24JqmcXLD+661BBmh6JHzrrejpmbVrCrtx9xO+E02ZastuF33o9PQcbinMjh0u
-# ELWb9IsvifSL9twGyWngl2LYkJcSef+XoBmu1RLY+osOg9+jTSCJJEpOJNs7q7RH
-# CVSt98Q/cxD+NzlKhnnkW7kOak2QTQO7kH/yvYmXf5fJqDgHM5jh/UdVEdk=
+# NwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFN/sjpL+05wp0xvr
+# Zu1EMRIEP5SIMA0GCSqGSIb3DQEBAQUABIIBABSrrH4lAYBUpWwBGd66bzAjNb8Y
+# xNAowKtLTUjSURv9Zd30xszyg+WKRpqC8NuMx3b+q37VvCHGBMuYnwXM+20koytO
+# Dbq7p9pvfS6p0OqWWIhhi20tDL1NjP1t+5u4pT4iu9NYu1KWMa1XET1/TYDfXloH
+# rOo2D/nGs811IVsh4Q2FNtKGco0IZrAm3cAuvQtPv+4dCnSqjQZ+jCn8+RSZtv14
+# +y+4WFQo/ZZ7l0ProjpfQxHhn3JoYHEZiqT44P16qSQDmsxiZWoB4HcuW8BcSii4
+# KwaPfWw9b9C+D0XeG79+hJDqAKsr55tpExn8ZJ3JsOPEz6EMrNWuw9sTf9g=
 # SIG # End signature block
